@@ -53,7 +53,23 @@ pub struct YogPipesMod;
 impl Mod for YogPipesMod {
     fn register(registry: &mut Registry) {
         yog_api::info!("[yog-pipes] pipe transport framework ready.");
-        let _ = registry; // no default registrations — modders call register_pipe()
+
+        // Infrastructure: rebuild graph when any pipe block is placed or broken
+        registry.on_player_place_block(|e, phase, _srv| {
+            if phase != yog_api::EventPhase::Post { return true; }
+            if !e.block_id.contains(":pipe_") { return true; }
+            rebuild_graph(&e.dimension, e.pos.x, e.pos.y, e.pos.z);
+            true
+        });
+
+        registry.on_block_break(|e, phase, _srv| {
+            if phase != yog_api::EventPhase::Post { return true; }
+            if !e.block_id.contains(":pipe_") { return true; }
+            rebuild_graph(&e.dimension, e.pos.x, e.pos.y, e.pos.z);
+            true
+        });
+
+        registry.on_tick(|srv| transfer_tick(srv));
     }
 }
 
