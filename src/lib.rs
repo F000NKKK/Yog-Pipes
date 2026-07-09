@@ -54,23 +54,51 @@ impl Mod for YogPipesMod {
     fn register(registry: &mut Registry) {
         yog_api::info!("[yog-pipes] pipe transport framework ready.");
 
+        // TODO: when the loader is rebuilt with ABI 27, uncomment:
+        // registry.interop().export(
+        //     "register_pipe_json",
+        //     register_pipe_from_json_c as *const std::ffi::c_void,
+        // );
+
         // Infrastructure: rebuild graph when any pipe block is placed or broken
         registry.on_player_place_block(|e, phase, _srv| {
             if phase != yog_api::EventPhase::Post { return true; }
             if !e.block_id.contains(":pipe_") { return true; }
-            rebuild_graph(&e.dimension, e.pos.x, e.pos.y, e.pos.z);
+            rebuild_graph("overworld", e.pos.x, e.pos.y, e.pos.z);
             true
         });
 
         registry.on_block_break(|e, phase, _srv| {
             if phase != yog_api::EventPhase::Post { return true; }
             if !e.block_id.contains(":pipe_") { return true; }
-            rebuild_graph(&e.dimension, e.pos.x, e.pos.y, e.pos.z);
+            rebuild_graph("overworld", e.pos.x, e.pos.y, e.pos.z);
             true
         });
 
         registry.on_tick(|srv| transfer_tick(srv));
     }
+}
+
+/// C-ABI compatible: register a pipe from a JSON string.
+///
+/// Once the loader is rebuilt with ABI 27, other mods can import this via:
+/// ```ignore
+/// let f: unsafe extern "C" fn(*const YogApi, *const c_char) =
+///     std::mem::transmute(registry.interop().import("yog-pipes:register_pipe_json").unwrap());
+/// f(registry.raw_api(), json_str.as_ptr() as *const c_char);
+/// ```
+#[no_mangle]
+pub unsafe extern "C" fn register_pipe_from_json_c(
+    api: *const yog_api::YogApi,
+    json_ptr: *const std::os::raw::c_char,
+) {
+    if api.is_null() || json_ptr.is_null() { return; }
+    let json = match std::ffi::CStr::from_ptr(json_ptr).to_str() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let mut registry = unsafe { yog_api::Registry::from_raw(api) };
+    framework::register_pipe_from_json(&mut registry, json);
 }
 
 yog_api::export_mod!(YogPipesMod);
