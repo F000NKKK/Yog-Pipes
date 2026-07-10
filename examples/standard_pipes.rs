@@ -7,10 +7,11 @@
 //!
 //! Add `yog-pipes` to your `[dependencies]` in `yog.toml`:
 //! ```toml
+//! [dependencies]
 //! yog-pipes = "0.1"
 //! ```
 //!
-//! Then call `register_pipe` directly in your mod:
+//! Then call `register_pipe` directly — the types and functions come from `yog_pipes`:
 //! ```ignore
 //! use yog_pipes::{PipeKind, PipeTier, PipeDef, register_pipe};
 //!
@@ -26,33 +27,59 @@
 //! }).unwrap();
 //! ```
 //!
-//! ## Interop (no direct Cargo dependency — mods loaded dynamically)
+//! ## Interop — dynamic mods without compile-time linking
 //!
-//! If your mod can't link `yog-pipes` at compile time (e.g. it's a separate Yog mod
-//! loaded by the runtime), you still add `yog-pipes` to `[dependencies]` in `yog.toml`.
-//! The `yog build` tool automatically maps `yog-pipes` → `yog_exports = { package = "yog_pipes_exports", ... }`,
-//! so all export crates share the single `yog_exports` namespace at development time.
-//!
-//! Your `yog.toml`:
+//! If your mod can't link `yog-pipes` at compile time (loaded dynamically by the runtime),
+//! you still add `yog-pipes` to `[dependencies]` in `yog.toml`:
 //! ```toml
 //! [dependencies]
 //! yog-pipes = "0.1"
 //! ```
 //!
-//! Your code uses the `yog_exports` crate to access types and call exported functions:
-//! ```ignore
-//! use yog_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, RegisterPipeArgs};
+//! The `yog build` tool automatically maps this to the exports crate:
+//! ```toml
+//! yog_exports = { package = "yog_pipes_exports", version = "0.1" }
+//! ```
 //!
-//! let args = RegisterPipeArgs {
-//!     api_ptr: registry.raw_api() as usize,
-//!     def: PipeDef {
-//!         block_id: "mymod:fluid_pipe_iron".into(),
-//!         kind: PipeKind::Fluid,
-//!         tier: PipeTier { name: "Iron".into(), speed: 2, tick_interval: 15,
-//!                          signal_range: 16, energy_buffer: 250 },
-//!         link_groups: vec!["pipe_fluid".into(), "tank".into()],
-//!         recipe_material: "minecraft:iron_ingot".into(),
-//!         recipe_center: "minecraft:glass_pane".into(),
+//! Your code uses the **same types and functions**, but from the `yog_exports` namespace.
+//! The generated exports crate exposes normal Rust functions — the interop C-ABI
+//! serialization happens transparently under the hood via `import!`:
+//! ```ignore
+//! use yog_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, register_pipe};
+//!
+//! register_pipe(registry, PipeDef {
+//!     block_id: "mymod:fluid_pipe_iron".into(),
+//!     kind: PipeKind::Fluid,
+//!     tier: PipeTier { name: "Iron".into(), speed: 2, tick_interval: 15,
+//!                      signal_range: 16, energy_buffer: 250 },
+//!     link_groups: vec!["pipe_fluid".into(), "tank".into()],
+//!     recipe_material: "minecraft:iron_ingot".into(),
+//!     recipe_center: "minecraft:water_bucket".into(),
+//!     energy_type: None,
+//! }).unwrap();
+//! ```
+//!
+//! No manual `registry.interop().call(...)` — the `import!` macro inside the
+//! generated exports crate handles all serialization and binding automatically.
+
+use yog_pipes::{PipeKind, PipeTier, PipeDef, register_pipe};
+
+use yog_api::{Mod, Registry};
+
+pub struct ExamplePipes;
+
+impl Mod for ExamplePipes {
+    fn register(registry: &mut Registry) {
+        let tiers = [
+            PipeTier { name: "Stone".into(),     speed: 1,  tick_interval: 20, signal_range: 8,   energy_buffer: 100  },
+            PipeTier { name: "Iron".into(),      speed: 2,  tick_interval: 15, signal_range: 16,  energy_buffer: 250  },
+            PipeTier { name: "Gold".into(),      speed: 4,  tick_interval: 10, signal_range: 32,  energy_buffer: 500  },
+            PipeTier { name: "Diamond".into(),   speed: 8,  tick_interval: 5,  signal_range: 64,  energy_buffer: 1000 },
+            PipeTier { name: "Netherite".into(), speed: 16, tick_interval: 3,  signal_range: 128, energy_buffer: 2000 },
+        ];
+
+        for tier in &tiers {
+            let mat = match tier.name.as_str() {
                 "Stone"     => "minecraft:cobblestone",
                 "Iron"      => "minecraft:iron_ingot",
                 "Gold"      => "minecraft:gold_ingot",
@@ -61,7 +88,7 @@
                 _           => "minecraft:cobblestone",
             };
 
-            // Item pipe
+            // ── Item pipe ─────────────────────────────────────────────────────
             register_pipe(registry, PipeDef {
                 block_id: format!("example:item_pipe_{}", tier.name.to_lowercase()),
                 kind: PipeKind::Item,
@@ -74,7 +101,20 @@
                 energy_type: None,
             }).unwrap();
 
-            // Signal pipe
+            // ── Fluid pipe ────────────────────────────────────────────────────
+            register_pipe(registry, PipeDef {
+                block_id: format!("example:fluid_pipe_{}", tier.name.to_lowercase()),
+                kind: PipeKind::Fluid,
+                tier: tier.clone(),
+                texture: None,
+                shape: None,
+                link_groups: vec!["pipe_fluid".into(), "tank".into()],
+                recipe_material: mat.into(),
+                recipe_center: "minecraft:water_bucket".into(),
+                energy_type: None,
+            }).unwrap();
+
+            // ── Signal pipe ───────────────────────────────────────────────────
             register_pipe(registry, PipeDef {
                 block_id: format!("example:signal_pipe_{}", tier.name.to_lowercase()),
                 kind: PipeKind::Signal,
@@ -87,7 +127,7 @@
                 energy_type: None,
             }).unwrap();
 
-            // Energy (Yog Flux) pipe — accepts all energy types by default
+            // ── Energy pipe (all types: YF, FE, RF, EU, custom) ──────────────
             register_pipe(registry, PipeDef {
                 block_id: format!("example:flux_pipe_{}", tier.name.to_lowercase()),
                 kind: PipeKind::Energy,

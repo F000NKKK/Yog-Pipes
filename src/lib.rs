@@ -11,16 +11,16 @@
 //!    register_pipe(registry, PipeDef { ... }).unwrap();
 //!    ```
 //!
-//! 2. **Interop** (for mods that can't depend directly) — call the exported
-//!    function via `registry.interop().call("register_pipe", &args)`:
+//! 2. **Interop** (for mods that can't link at compile time) — add `yog-pipes`
+//!    to `[dependencies]` in `yog.toml`; `yog build` maps it to the exports crate.
+//!    Use the **same types and functions** from the `yog_exports` namespace:
 //!    ```ignore
-//!    use yog_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, RegisterPipeArgs};
+//!    use yog_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, register_pipe};
 //!
-//!    registry.interop().call("register_pipe", &RegisterPipeArgs {
-//!        api_ptr: registry.raw_api() as usize,
-//!        def: PipeDef { ... },
-//!    }).unwrap();
+//!    register_pipe(registry, PipeDef { ... }).unwrap();
 //!    ```
+//!    No manual `registry.interop().call(...)` — the `import!` macro inside the
+//!    generated exports crate handles all serialization and binding automatically.
 //!
 //! 3. **Custom energy types** — register new energy types for the pipe network:
 //!    ```ignore

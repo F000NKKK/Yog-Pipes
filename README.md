@@ -63,32 +63,35 @@ fn register(registry: &mut Registry) {
 }
 ```
 
-### 2. Interop (no direct dependency)
+### 2. Interop (no compile-time linking)
 
-If your mod can't depend on `yog-pipes` directly (e.g. it's loaded via Yog Mod Loader without Cargo linking), use the interop export:
+If your mod can't link `yog-pipes` at compile time (loaded dynamically by the runtime),
+you still add it to `[dependencies]` in `yog.toml`. The `yog build` tool automatically
+maps `yog-pipes` → `yog_exports = { package = "yog_pipes_exports", ... }`.
+
+Your code uses the **same types and functions**, but from the `yog_exports` namespace.
+The generated exports crate exposes normal Rust functions — the interop C-ABI
+serialization happens transparently under the hood via `import!`:
 
 ```rust
-use yog_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, RegisterPipeArgs};
+use yog_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, register_pipe};
 
 fn register(registry: &mut Registry) {
-    // Get the raw YogApi pointer
-    let api_ptr = registry.raw_api() as usize;
-
-    // Call the exported function via interop
-    registry.interop().call("register_pipe", &RegisterPipeArgs {
-        api_ptr,
-        def: PipeDef {
-            block_id: "mymod:item_pipe_iron".into(),
-            kind: PipeKind::Item,
-            tier: PipeTier { name: "Iron".into(), speed: 2, tick_interval: 15,
-                             signal_range: 16, energy_buffer: 250 },
-            link_groups: vec!["pipe_item".into(), "inventory".into()],
-            recipe_material: "minecraft:iron_ingot".into(),
-            recipe_center: String::new(),
-        },
+    register_pipe(registry, PipeDef {
+        block_id: "mymod:item_pipe_iron".into(),
+        kind: PipeKind::Item,
+        tier: PipeTier { name: "Iron".into(), speed: 2, tick_interval: 15,
+                         signal_range: 16, energy_buffer: 250 },
+        link_groups: vec!["pipe_item".into(), "inventory".into()],
+        recipe_material: "minecraft:iron_ingot".into(),
+        recipe_center: String::new(),
+        energy_type: None,
     }).unwrap();
 }
 ```
+
+No manual `registry.interop().call(...)` — the `import!` macro inside the
+generated exports crate handles all serialization and binding automatically.
 
 ### 3. Custom energy types
 
