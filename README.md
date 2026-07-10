@@ -1,22 +1,25 @@
 # Yog Pipes
 
-Universal transport framework for [Yog mods](https://github.com/F000NKKK/Yog-Mod-Loader).
+Universal bridge framework for [Yog mods](https://github.com/F000NKKK/Yog-Mod-Loader).
 
 ## What it is
 
-Yog Pipes is **not** a fixed set of pipe blocks — it's a framework that lets modders define **any** kind of transport pipe:
+Yog Pipes is **not** a fixed set of pipe blocks — it's a framework that lets modders define **any** kind of transport or signal pipe:
 
 - **Item pipes** — move item stacks between inventories.
-- **Fluid pipes** — placeholder for future fluid API.
-- **Signal pipes** — propagate redstone signals through the pipe network.
-- **Energy pipes** — transfer **Yog Flux (YF)**, a custom energy unit.
+- **Fluid pipes** — transfer fluids between tanks and machines.
+- **Signal pipes** — propagate redstone-like signals through the pipe network, letting blocks communicate without direct wiring.
+- **Energy pipes** — transfer any energy type: Yog Flux (YF), Redstone Flux (RF), Forge Energy (FE), EU, or custom types defined by other mods.
+
+The energy system is **extensible**: any mod can register a new `EnergyType` and other mods can build pipes, generators, and consumers for it.
 
 ## How it works
 
-1. **Virtual graph** — when pipes are placed/broken, the framework rebuilds a graph of all connected pipes and adjacent inventories.
+1. **Virtual graph** — when pipes are placed/broken, the framework rebuilds a graph of all connected pipes and adjacent inventories/machines.
 2. **State machine** — each transfer tick cycles through `Extract → Route → Insert` for every pipe in the graph.
 3. **BFS routing** — finds shortest paths between source and destination nodes.
-4. **Customizable** — modders control textures, link groups (which blocks pipes connect to), shapes, and tiers.
+4. **Signal propagation** — signals travel through the pipe network; any block can emit or listen on a signal channel.
+5. **Customizable** — modders control textures, link groups (which blocks pipes connect to), shapes, and tiers.
 
 ## API
 
@@ -27,6 +30,7 @@ All public types are re-exported from `yog_pipes`:
 | `PipeKind` | What a pipe carries: `Item`, `Fluid`, `Signal`, `Energy` |
 | `PipeTier` | Speed, tick interval, signal range, energy buffer |
 | `PipeDef` | Full pipe definition: block id, kind, tier, texture, shape, link groups, recipe |
+| `EnergyType` | An energy type identifier (YF, RF, FE, EU, or custom) |
 | `RegisterPipeArgs` | Serialisable args for interop calls (rkyv) |
 | `register_pipe(registry, def)` | Register one pipe block + item + recipe |
 
@@ -64,7 +68,7 @@ fn register(registry: &mut Registry) {
 If your mod can't depend on `yog-pipes` directly (e.g. it's loaded via Yog Mod Loader without Cargo linking), use the interop export:
 
 ```rust
-use yog_pipes_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, RegisterPipeArgs};
+use yog_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, RegisterPipeArgs};
 
 fn register(registry: &mut Registry) {
     // Get the raw YogApi pointer
@@ -85,6 +89,25 @@ fn register(registry: &mut Registry) {
     }).unwrap();
 }
 ```
+
+### 3. Custom energy types
+
+Any mod can register a new energy type:
+
+```rust
+use yog_pipes::{EnergyType, register_energy_type};
+
+// Register a custom energy type (e.g. "mana" from a magic mod)
+register_energy_type(registry, EnergyType {
+    id: "mymod:mana".into(),
+    display_name: "Mana".into(),
+    // Conversion rates to Yog Flux (YF)
+    yf_per_unit: 2.0,
+    units_per_yf: 0.5,
+}).unwrap();
+```
+
+Then other mods can build pipes that transfer "mana" by specifying `EnergyTypeId("mymod:mana")` in their pipe definition.
 
 ## Example
 
