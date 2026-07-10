@@ -10,7 +10,8 @@ use yog_api::yog_export;
 // ── Pipe kind ────────────────────────────────────────────────────────────────
 
 /// What a pipe carries.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, ::yog_api::rkyv::Archive, ::yog_api::rkyv::Serialize, ::yog_api::rkyv::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[yog_export]
 pub enum PipeKind {
     Item,
     Fluid,
@@ -20,7 +21,8 @@ pub enum PipeKind {
 
 // ── Pipe tier ────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq, ::yog_api::rkyv::Archive, ::yog_api::rkyv::Serialize, ::yog_api::rkyv::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[yog_export]
 pub struct PipeTier {
     /// Display name (e.g. "Iron", "Gold"). Owned for serialization.
     pub name: String,
@@ -37,7 +39,8 @@ pub struct PipeTier {
 // ── Pipe definition ──────────────────────────────────────────────────────────
 
 /// Registration entry for one pipe block+item.
-#[derive(Debug, Clone, ::yog_api::rkyv::Archive, ::yog_api::rkyv::Serialize, ::yog_api::rkyv::Deserialize)]
+#[derive(Debug, Clone)]
+#[yog_export]
 pub struct PipeDef {
     /// Block/item id (e.g. `"mymod:item_pipe_iron"`).
     pub block_id: String,
