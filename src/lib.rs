@@ -25,7 +25,7 @@ mod framework;
 mod graph;
 mod transfer;
 
-use yog_api::{Mod, Registry, yog_export};
+use yog_api::{Mod, Registry};
 
 // Re-export all public types so mods can `use yog_pipes::*`.
 pub use framework::{PipeKind, PipeTier, PipeDef, RegisterPipeArgs, register_pipe, register_pipe_interop};

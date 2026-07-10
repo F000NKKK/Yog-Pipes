@@ -89,18 +89,14 @@ pub struct PipeDef {
 pub fn register_pipe(registry: &mut yog_api::Registry, def: PipeDef) -> Result<(), String> {
     let shape = def.shape.unwrap_or((4.0, 4.0, 4.0, 12.0, 12.0, 12.0));
 
-    let mut block = yog_api::BlockDef::new(&def.block_id)
+    let link_groups: Vec<&str> = def.link_groups.iter().map(|s| s.as_str()).collect();
+
+    let block = yog_api::BlockDef::new(&def.block_id)
         .strength(1.5, 3.0)
         .sound("stone")
         .shape(shape.0, shape.1, shape.2, shape.3, shape.4, shape.5)
-        .connects_to_neighbors();
-
-    if let Some(tex) = &def.texture {
-        block = block.texture("default", tex);
-    }
-
-    let link_groups: Vec<&str> = def.link_groups.iter().map(|s| s.as_str()).collect();
-    block = block.connect_groups(&link_groups);
+        .connects_to_neighbors()
+        .connect_groups(&link_groups);
 
     registry.register_block(block);
 
@@ -141,7 +137,7 @@ pub fn register_pipe(registry: &mut yog_api::Registry, def: PipeDef) -> Result<(
 // ── Interop registration (for mods that can't depend directly) ───────────────
 
 /// Serialisable arguments for the interop call.
-#[derive(::yog_api::rkyv::Archive, ::yog_api::rkyv::Serialize, ::yog_api::rkyv::Deserialize)]
+#[yog_export]
 pub struct RegisterPipeArgs {
     /// Raw `YogApi` pointer from `Registry::raw_api()`.
     pub api_ptr: usize,
