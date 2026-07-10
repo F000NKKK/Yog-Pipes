@@ -56,6 +56,8 @@ impl Mod for YogPipesMod {
     fn register(registry: &mut Registry) {
         yog_api::info!("[yog-pipes] pipe transport framework ready.");
 
+        registry.interop().export("register_pipe", __yog_wrap_register_pipe as *const std::ffi::c_void);
+
         // Infrastructure: rebuild graph when any pipe block is placed or broken
         registry.on_player_place_block(|e, phase, _srv| {
             if phase != yog_api::EventPhase::Post { return true; }
