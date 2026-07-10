@@ -69,29 +69,33 @@ If your mod can't link `yog-pipes` at compile time (loaded dynamically by the ru
 you still add it to `[dependencies]` in `yog.toml`. The `yog build` tool automatically
 maps `yog-pipes` → `yog_exports = { package = "yog_pipes_exports", ... }`.
 
-Your code uses the **same types and functions**, but from the `yog_exports` namespace.
-The generated exports crate exposes normal Rust functions — the interop C-ABI
-serialization happens transparently under the hood via `import!`:
+The generated exports crate exposes the interop function. It accepts a single
+serialisable `RegisterPipeArgs` struct (not the raw `Registry`) — the C-ABI
+layer serialises everything via rkyv:
 
 ```rust
-use yog_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, register_pipe};
+use yog_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, RegisterPipeArgs};
 
 fn register(registry: &mut Registry) {
-    register_pipe(registry, PipeDef {
-        block_id: "mymod:item_pipe_iron".into(),
-        kind: PipeKind::Item,
-        tier: PipeTier { name: "Iron".into(), speed: 2, tick_interval: 15,
-                         signal_range: 16, energy_buffer: 250 },
-        link_groups: vec!["pipe_item".into(), "inventory".into()],
-        recipe_material: "minecraft:iron_ingot".into(),
-        recipe_center: String::new(),
-        energy_type: None,
+    yog_exports::yog_pipes::register_pipe(RegisterPipeArgs {
+        api_ptr: registry.raw_api() as usize,
+        def: PipeDef {
+            block_id: "mymod:item_pipe_iron".into(),
+            kind: PipeKind::Item,
+            tier: PipeTier { name: "Iron".into(), speed: 2, tick_interval: 15,
+                             signal_range: 16, energy_buffer: 250 },
+            link_groups: vec!["pipe_item".into(), "inventory".into()],
+            recipe_material: "minecraft:iron_ingot".into(),
+            recipe_center: String::new(),
+            energy_type: None,
+        },
     }).unwrap();
 }
 ```
 
-No manual `registry.interop().call(...)` — the `import!` macro inside the
-generated exports crate handles all serialization and binding automatically.
+The `register_pipe_interop` function (annotated with `#[yog_export]`) generates
+a C-ABI wrapper. The imports crate uses `import!` to bind to it and expose
+a normal Rust function that handles rkyv serialisation transparently.
 
 ### 3. Custom energy types
 
