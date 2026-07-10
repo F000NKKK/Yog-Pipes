@@ -12,6 +12,7 @@ use crate::PipeKind;
 
 /// Transfer state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum TransferState {
     /// Waiting for work.
     Idle,
@@ -55,6 +56,7 @@ pub fn transfer_tick(_srv: &dyn yog_api::Server) {
 }
 
 /// Schedule a transfer from `from` to `to` for the given amount.
+#[allow(dead_code)]
 pub fn schedule(from: NodeKey, to: NodeKey, amount: u64, kind: PipeKind) {
     let path = crate::graph::find_path(&from, &to);
     let mut state = TRANSFER.lock().unwrap();

@@ -4,6 +4,22 @@
 //! ```ignore
 //! use yog_pipes_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, register_pipe};
 //! ```
+//!
+//! ## Quick start
+//!
+//! ```ignore
+//! use yog_pipes::{PipeKind, PipeTier, PipeDef, register_pipe};
+//!
+//! register_pipe(registry, PipeDef {
+//!     block_id: "mymod:item_pipe_iron".into(),
+//!     kind: PipeKind::Item,
+//!     tier: PipeTier { name: "Iron".into(), speed: 2, tick_interval: 15,
+//!                      signal_range: 16, energy_buffer: 250 },
+//!     link_groups: vec!["pipe_item".into(), "inventory".into()],
+//!     recipe_material: "minecraft:iron_ingot".into(),
+//!     recipe_center: String::new(),
+//! }).unwrap();
+//! ```
 
 use yog_api::yog_export;
 
@@ -48,6 +64,11 @@ pub struct PipeDef {
     pub kind: PipeKind,
     /// Speed/capacity tier.
     pub tier: PipeTier,
+    /// Custom block texture (optional — framework will use a default).
+    pub texture: Option<String>,
+    /// Custom collision/selection shape `(min_x, min_y, min_z, max_x, max_y, max_z)`.
+    /// `None` = default pipe shape (4..12 on all axes).
+    pub shape: Option<(f32, f32, f32, f32, f32, f32)>,
     /// Connect groups for automatic neighbor linking.
     pub link_groups: Vec<String>,
     /// Recipe material item (e.g. `"minecraft:iron_ingot"`). Empty = creative-only.
@@ -56,24 +77,30 @@ pub struct PipeDef {
     pub recipe_center: String,
 }
 
-/// Register one pipe block + item + recipe through the interop C ABI.
-///
-/// Called by other mods via:
-/// ```ignore
-/// register_pipe(registry.raw_api() as usize, PipeDef { ... }).unwrap();
-/// ```
-///
-/// `api_ptr` is the raw `YogApi` pointer from `Registry::raw_api()`.
-pub fn register_pipe_impl(registry: &mut yog_api::Registry, def: PipeDef) -> Result<(), String> {
-    let shape = (4.0f32, 4.0f32, 4.0f32, 12.0f32, 12.0f32, 12.0f32);
+// ── Registration helper ──────────────────────────────────────────────────────
 
-    let link_groups: Vec<&str> = def.link_groups.iter().map(|s| s.as_str()).collect();
-    let block = yog_api::BlockDef::new(&def.block_id)
+/// Register one pipe block + item + recipe.
+///
+/// Called by mods that depend on `yog-pipes` directly:
+/// ```ignore
+/// register_pipe(registry, PipeDef { ... }).unwrap();
+/// register_pipe(registry, PipeDef { ... }).unwrap();
+/// ```
+pub fn register_pipe(registry: &mut yog_api::Registry, def: PipeDef) -> Result<(), String> {
+    let shape = def.shape.unwrap_or((4.0, 4.0, 4.0, 12.0, 12.0, 12.0));
+
+    let mut block = yog_api::BlockDef::new(&def.block_id)
         .strength(1.5, 3.0)
         .sound("stone")
         .shape(shape.0, shape.1, shape.2, shape.3, shape.4, shape.5)
-        .connects_to_neighbors()
-        .connect_groups(&link_groups);
+        .connects_to_neighbors();
+
+    if let Some(tex) = &def.texture {
+        block = block.texture("default", tex);
+    }
+
+    let link_groups: Vec<&str> = def.link_groups.iter().map(|s| s.as_str()).collect();
+    block = block.connect_groups(&link_groups);
 
     registry.register_block(block);
 
@@ -109,4 +136,24 @@ pub fn register_pipe_impl(registry: &mut yog_api::Registry, def: PipeDef) -> Res
     }
 
     Ok(())
+}
+
+// ── Interop registration (for mods that can't depend directly) ───────────────
+
+/// Serialisable arguments for the interop call.
+#[derive(::yog_api::rkyv::Archive, ::yog_api::rkyv::Serialize, ::yog_api::rkyv::Deserialize)]
+pub struct RegisterPipeArgs {
+    /// Raw `YogApi` pointer from `Registry::raw_api()`.
+    pub api_ptr: usize,
+    /// Pipe definition.
+    pub def: PipeDef,
+}
+
+/// Interop entry point — called by mods via `registry.interop().call("register_pipe", &args)`.
+///
+/// This function is exported under the `__yog_wrap_register_pipe` symbol.
+#[yog_export]
+pub fn register_pipe_interop(args: RegisterPipeArgs) -> Result<(), String> {
+    let mut registry = unsafe { yog_api::Registry::from_raw(args.api_ptr as *const yog_api::YogApi) };
+    register_pipe(&mut registry, args.def)
 }

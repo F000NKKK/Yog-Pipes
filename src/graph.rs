@@ -12,6 +12,7 @@ pub type NodeKey = (String, i32, i32, i32);
 
 /// A node in the pipe graph.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PipeNode {
     pub pos: NodeKey,
     pub is_source: bool,
@@ -29,6 +30,7 @@ pub type PipeEdge = (NodeKey, NodeKey);
 
 /// The full pipe network graph.
 #[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
 pub struct PipeGraph {
     pub nodes: HashMap<NodeKey, PipeNode>,
     pub edges: HashSet<PipeEdge>,
@@ -68,6 +70,7 @@ pub fn rebuild_graph(dim: &str, x: i32, y: i32, z: i32) {
 
 /// Propagate redstone signal through the pipe graph via BFS with attenuation.
 /// Each hop reduces signal strength by 1.
+#[allow(dead_code)]
 pub fn propagate_signals(source: NodeKey, strength: u8) {
     let graph = GRAPH.lock().unwrap();
     let mut queue: VecDeque<(NodeKey, u8)> = VecDeque::new();
@@ -100,6 +103,7 @@ pub fn propagate_signals(source: NodeKey, strength: u8) {
 }
 
 /// Find the shortest path between two nodes using BFS.
+#[allow(dead_code)]
 pub fn find_path(from: &NodeKey, to: &NodeKey) -> Option<Vec<NodeKey>> {
     let graph = GRAPH.lock().unwrap();
     let mut queue: VecDeque<NodeKey> = VecDeque::new();
