@@ -114,4 +114,4 @@ register_pipe(registry, PipeDef {
 
 ## License
 
-Apache 2.0
+AGPL-v3.0
