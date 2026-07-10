@@ -1,49 +1,67 @@
-//! Yog Pipes — universal bridge framework for Yog mods.
+//! Yog Pipes — universal transport framework for Yog mods.
 //!
-//! Provides pipe types, registration API, and an extensible energy system.
-//! Other mods can either:
+//! This is a **framework**, not a mod. It provides building blocks for mods
+//! to define their own pipes without dictating recipes, tiers, or models.
 //!
-//! 1. **Direct dependency** — add `yog-pipes` to `Cargo.toml` and call
-//!    [`register_pipe`] directly:
-//!    ```ignore
-//!    use yog_pipes::{PipeKind, PipeTier, PipeDef, register_pipe};
+//! ## Philosophy
 //!
-//!    register_pipe(registry, PipeDef { ... }).unwrap();
-//!    ```
+//! - **No fixed fields** — `PipeDef` carries an open `properties` map instead
+//!   of a rigid `PipeTier` struct. Mods define whatever parameters they need.
+//! - **No recipes** — the framework never generates recipes. Mods register
+//!   their own via `registry.add_shaped_recipe()` if they want crafting.
+//! - **3D models** — `ModelDef` lets mods describe block models with
+//!   per-face textures, elements, and rotation — no JSON files needed.
+//! - **Link groups** — control which blocks pipes connect to.
+//! - **Extensible pipe kinds** — `PipeKind::Custom("mymod:mana")` for custom types.
 //!
-//! 2. **Interop** (for mods that can't link at compile time) — add `yog-pipes`
-//!    to `[dependencies]` in `yog.toml`; `yog build` maps it to the exports crate.
-//!    Use the **same types and functions** from the `yog_exports` namespace:
-//!    ```ignore
-//!    use yog_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, register_pipe};
+//! ## Usage
 //!
-//!    register_pipe(registry, PipeDef { ... }).unwrap();
-//!    ```
-//!    No manual `registry.interop().call(...)` — the `import!` macro inside the
-//!    generated exports crate handles all serialization and binding automatically.
+//! ### Direct dependency
 //!
-//! 3. **Custom energy types** — register new energy types for the pipe network:
-//!    ```ignore
-//!    use yog_pipes::{EnergyType, register_energy_type};
+//! ```ignore
+//! use yog_pipes::{PipeKind, PipeDef, register_pipe};
 //!
-//!    register_energy_type(registry, EnergyType {
-//!        id: "mymod:mana".into(),
-//!        display_name: "Mana".into(),
-//!        yf_per_unit: 2.0,
-//!        units_per_yf: 0.5,
-//!    }).unwrap();
-//!    ```
+//! register_pipe(registry, PipeDef {
+//!     block_id: "mymod:pipe_iron".into(),
+//!     kind: PipeKind::Item,
+//!     properties: [("speed", 2.0), ("tick_interval", 15.0)].into(),
+//!     model: None,
+//!     link_groups: vec!["pipe_item".into(), "inventory".into()],
+//! }).unwrap();
+//! ```
 //!
-//! ## What Yog Pipes can do
+//! ### Interop
 //!
-//! - **Item transport** — move item stacks between inventories through a pipe network.
-//! - **Fluid transport** — transfer fluids between tanks and machines.
-//! - **Signal propagation** — blocks can emit and listen on signal channels through pipes,
-//!   enabling wireless-like communication without redstone wiring.
-//! - **Energy transfer** — Yog Flux (YF), Redstone Flux (RF), Forge Energy (FE), EU,
-//!   or any custom energy type registered by other mods.
-//! - **Extensible energy system** — any mod can register a new `EnergyType` and other
-//!   mods can build pipes, generators, and consumers for it.
+//! ```ignore
+//! use yog_exports::yog_pipes::{PipeKind, PipeDef, RegisterPipeArgs};
+//!
+//! yog_exports::yog_pipes::register_pipe(RegisterPipeArgs {
+//!     api_ptr: registry.raw_api() as usize,
+//!     def: PipeDef { ... },
+//! }).unwrap();
+//! ```
+//!
+//! ### Custom 3D model
+//!
+//! ```ignore
+//! use yog_pipes::{PipeKind, PipeDef, ModelDef, ModelElement, FaceDef, register_pipe};
+//!
+//! register_pipe(registry, PipeDef {
+//!     block_id: "mymod:fancy_pipe".into(),
+//!     kind: PipeKind::Fluid,
+//!     properties: [("fluid_capacity", 8000.0)].into(),
+//!     model: Some(ModelDef {
+//!         texture: Some("mymod:block/fancy_pipe".into()),
+//!         elements: vec![ModelElement {
+//!             from: [4.0, 0.0, 4.0],
+//!             to: [12.0, 16.0, 12.0],
+//!             faces: [].into(),
+//!             rotation: None,
+//!         }],
+//!     }),
+//!     link_groups: vec!["pipe_fluid".into(), "tank".into()],
+//! }).unwrap();
+//! ```
 
 mod framework;
 mod graph;
@@ -51,10 +69,10 @@ mod transfer;
 
 use yog_api::{Mod, Registry};
 
-// Re-export all public types so mods can `use yog_pipes::*`.
+// Re-export all public types
 pub use framework::{
-    PipeKind, PipeTier, PipeDef, RegisterPipeArgs,
-    EnergyType, EnergyTypeId, register_energy_type,
+    PipeKind, PipeDef, ModelDef, ModelElement, FaceDef, ElementRotation,
+    RegisterPipeArgs,
     register_pipe, register_pipe_interop,
 };
 
@@ -71,32 +89,6 @@ impl Mod for YogPipesMod {
             "register_pipe",
             register_pipe_interop as *const std::ffi::c_void,
         );
-
-        // Register built-in energy types
-        let _ = register_energy_type(registry, EnergyType {
-            id: "yog:flux".into(),
-            display_name: "Yog Flux".into(),
-            yf_per_unit: 1.0,
-            units_per_yf: 1.0,
-        });
-        let _ = register_energy_type(registry, EnergyType {
-            id: "forge:energy".into(),
-            display_name: "Forge Energy".into(),
-            yf_per_unit: 0.1,
-            units_per_yf: 10.0,
-        });
-        let _ = register_energy_type(registry, EnergyType {
-            id: "redstone:flux".into(),
-            display_name: "Redstone Flux".into(),
-            yf_per_unit: 0.1,
-            units_per_yf: 10.0,
-        });
-        let _ = register_energy_type(registry, EnergyType {
-            id: "ic2:eu".into(),
-            display_name: "Energy Unit (EU)".into(),
-            yf_per_unit: 4.0,
-            units_per_yf: 0.25,
-        });
 
         // Infrastructure: rebuild graph when any pipe block is placed or broken
         registry.on_player_place_block(|e, phase, _srv| {

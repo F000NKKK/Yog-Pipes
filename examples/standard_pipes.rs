@@ -1,72 +1,49 @@
-//! Example: Standard pipes (5 tiers × 4 kinds = 20 pipes).
+//! Example: Registering pipes with the Yog Pipes framework.
 //!
-//! This example shows how to register pipes using the `yog-pipes` framework.
-//! Copy this into your own mod to customise textures, recipes, and tiers.
+//! This example demonstrates how mods define their own pipes using the
+//! framework's open-ended API — no fixed tiers, no forced recipes.
 //!
-//! ## Direct dependency (recommended)
+//! ## Direct dependency
 //!
-//! Add `yog-pipes` to your `[dependencies]` in `yog.toml`:
 //! ```toml
 //! [dependencies]
 //! yog-pipes = "0.1"
 //! ```
 //!
-//! Then call `register_pipe` directly:
 //! ```ignore
-//! use yog_pipes::{PipeKind, PipeTier, PipeDef, register_pipe};
+//! use yog_pipes::{PipeKind, PipeDef, register_pipe};
 //!
 //! register_pipe(registry, PipeDef {
-//!     block_id: "mymod:item_pipe_iron".into(),
+//!     block_id: "mymod:pipe_iron".into(),
 //!     kind: PipeKind::Item,
-//!     tier: PipeTier { name: "Iron".into(), speed: 2, tick_interval: 15,
-//!                      signal_range: 16, energy_buffer: 250 },
+//!     properties: [("speed", 2.0), ("tick_interval", 15.0)].into(),
+//!     model: None,
 //!     link_groups: vec!["pipe_item".into(), "inventory".into()],
-//!     recipe_material: "minecraft:iron_ingot".into(),
-//!     recipe_center: String::new(),
-//!     energy_type: None,
 //! }).unwrap();
 //! ```
 //!
-//! ## Interop — dynamic mods without compile-time linking
+//! ## Interop
 //!
-//! If your mod can't link `yog-pipes` at compile time (loaded dynamically by the runtime),
-//! add `yog-pipes` to `[dependencies]` in `yog.toml`:
 //! ```toml
 //! [dependencies]
 //! yog-pipes = "0.1"
 //! ```
 //!
-//! The `yog build` tool automatically maps this to the exports crate:
-//! ```toml
-//! yog-exports = { package = "yog-pipes-exports", version = "0.1" }
-//! ```
-//!
-//! The generated exports crate exposes the interop function. It accepts a single
-//! serialisable `RegisterPipeArgs` struct (not the raw `Registry`) — the C-ABI
-//! layer serialises everything via rkyv:
 //! ```ignore
-//! use yog_exports::yog_pipes::{PipeKind, PipeTier, PipeDef, RegisterPipeArgs};
+//! use yog_exports::yog_pipes::{PipeKind, PipeDef, RegisterPipeArgs};
 //!
 //! yog_exports::yog_pipes::register_pipe(RegisterPipeArgs {
 //!     api_ptr: registry.raw_api() as usize,
-//!     def: PipeDef {
-//!         block_id: "mymod:fluid_pipe_iron".into(),
-//!         kind: PipeKind::Fluid,
-//!         tier: PipeTier { name: "Iron".into(), speed: 2, tick_interval: 15,
-//!                          signal_range: 16, energy_buffer: 250 },
-//!         link_groups: vec!["pipe_fluid".into(), "tank".into()],
-//!         recipe_material: "minecraft:iron_ingot".into(),
-//!         recipe_center: "minecraft:water_bucket".into(),
-//!         energy_type: None,
-//!     },
+//!     def: PipeDef { ... },
 //! }).unwrap();
 //! ```
 //!
-//! The `register_pipe_interop` function (annotated with `#[yog_export]`) generates
-//! a C-ABI wrapper. The imports crate uses `import!` to bind to it and expose
-//! a normal Rust function that handles rkyv serialisation transparently.
+//! ---
+//!
+//! Below are examples showing what different mods might register.
+//! Each mod defines its own parameters — the framework does not dictate them.
 
-use yog_pipes::{PipeKind, PipeTier, PipeDef, register_pipe};
+use yog_pipes::{PipeKind, PipeDef, register_pipe};
 
 use yog_api::{Mod, Registry};
 
@@ -74,76 +51,105 @@ pub struct ExamplePipes;
 
 impl Mod for ExamplePipes {
     fn register(registry: &mut Registry) {
-        let tiers = [
-            PipeTier { name: "Stone".into(),     speed: 1,  tick_interval: 20, signal_range: 8,   energy_buffer: 100  },
-            PipeTier { name: "Iron".into(),      speed: 2,  tick_interval: 15, signal_range: 16,  energy_buffer: 250  },
-            PipeTier { name: "Gold".into(),      speed: 4,  tick_interval: 10, signal_range: 32,  energy_buffer: 500  },
-            PipeTier { name: "Diamond".into(),   speed: 8,  tick_interval: 5,  signal_range: 64,  energy_buffer: 1000 },
-            PipeTier { name: "Netherite".into(), speed: 16, tick_interval: 3,  signal_range: 128, energy_buffer: 2000 },
-        ];
+        // ── Example 1: Simple item pipe with custom speed ────────────────────
+        register_pipe(registry, PipeDef {
+            block_id: "example:item_pipe_stone".into(),
+            kind: PipeKind::Item,
+            properties: [
+                ("speed", 1.0),
+                ("tick_interval", 20.0),
+            ].into(),
+            model: None,
+            link_groups: vec!["pipe_item".into(), "inventory".into()],
+        }).unwrap();
 
-        for tier in &tiers {
-            let mat = match tier.name.as_str() {
-                "Stone"     => "minecraft:cobblestone",
-                "Iron"      => "minecraft:iron_ingot",
-                "Gold"      => "minecraft:gold_ingot",
-                "Diamond"   => "minecraft:diamond",
-                "Netherite" => "minecraft:netherite_ingot",
-                _           => "minecraft:cobblestone",
-            };
+        // ── Example 2: High-speed item pipe ──────────────────────────────────
+        register_pipe(registry, PipeDef {
+            block_id: "example:item_pipe_netherite".into(),
+            kind: PipeKind::Item,
+            properties: [
+                ("speed", 16.0),
+                ("tick_interval", 2.0),
+                ("stack_size", 64.0),
+            ].into(),
+            model: None,
+            link_groups: vec!["pipe_item".into(), "inventory".into()],
+        }).unwrap();
 
-            // ── Item pipe ─────────────────────────────────────────────────────
-            register_pipe(registry, PipeDef {
-                block_id: format!("example:item_pipe_{}", tier.name.to_lowercase()),
-                kind: PipeKind::Item,
-                tier: tier.clone(),
-                texture: None,
-                shape: None,
-                link_groups: vec!["pipe_item".into(), "inventory".into()],
-                recipe_material: mat.into(),
-                recipe_center: String::new(),
-                energy_type: None,
-            }).unwrap();
+        // ── Example 3: Fluid pipe with temperature limit ─────────────────────
+        register_pipe(registry, PipeDef {
+            block_id: "example:fluid_pipe_iron".into(),
+            kind: PipeKind::Fluid,
+            properties: [
+                ("speed", 2.0),
+                ("fluid_capacity", 4000.0),
+                ("temperature_max", 1000.0),
+            ].into(),
+            model: None,
+            link_groups: vec!["pipe_fluid".into(), "tank".into()],
+        }).unwrap();
 
-            // ── Fluid pipe ────────────────────────────────────────────────────
-            register_pipe(registry, PipeDef {
-                block_id: format!("example:fluid_pipe_{}", tier.name.to_lowercase()),
-                kind: PipeKind::Fluid,
-                tier: tier.clone(),
-                texture: None,
-                shape: None,
-                link_groups: vec!["pipe_fluid".into(), "tank".into()],
-                recipe_material: mat.into(),
-                recipe_center: "minecraft:water_bucket".into(),
-                energy_type: None,
-            }).unwrap();
+        // ── Example 4: Lava-proof pipe with high pressure ───────────────────
+        register_pipe(registry, PipeDef {
+            block_id: "example:fluid_pipe_obsidian".into(),
+            kind: PipeKind::Fluid,
+            properties: [
+                ("speed", 1.0),
+                ("fluid_capacity", 8000.0),
+                ("temperature_max", 3000.0),
+                ("pressure_max", 50.0),
+            ].into(),
+            model: None,
+            link_groups: vec!["pipe_fluid".into(), "tank".into()],
+        }).unwrap();
 
-            // ── Signal pipe ───────────────────────────────────────────────────
-            register_pipe(registry, PipeDef {
-                block_id: format!("example:signal_pipe_{}", tier.name.to_lowercase()),
-                kind: PipeKind::Signal,
-                tier: tier.clone(),
-                texture: None,
-                shape: None,
-                link_groups: vec!["pipe_signal".into(), "redstone".into()],
-                recipe_material: mat.into(),
-                recipe_center: "minecraft:redstone".into(),
-                energy_type: None,
-            }).unwrap();
+        // ── Example 5: Signal pipe with range ────────────────────────────────
+        register_pipe(registry, PipeDef {
+            block_id: "example:signal_pipe_redstone".into(),
+            kind: PipeKind::Signal,
+            properties: [
+                ("signal_range", 15.0),
+            ].into(),
+            model: None,
+            link_groups: vec!["pipe_signal".into(), "redstone".into()],
+        }).unwrap();
 
-            // ── Energy pipe (all types: YF, FE, RF, EU, custom) ──────────────
-            register_pipe(registry, PipeDef {
-                block_id: format!("example:flux_pipe_{}", tier.name.to_lowercase()),
-                kind: PipeKind::Energy,
-                tier: tier.clone(),
-                texture: None,
-                shape: None,
-                link_groups: vec!["pipe_energy".into(), "energy_producer".into(), "energy_consumer".into()],
-                recipe_material: mat.into(),
-                recipe_center: "minecraft:glowstone_dust".into(),
-                energy_type: None,
-            }).unwrap();
-        }
+        // ── Example 6: Energy pipe for Yog Flux only ─────────────────────────
+        register_pipe(registry, PipeDef {
+            block_id: "example:yf_pipe_basic".into(),
+            kind: PipeKind::Energy,
+            properties: [
+                ("speed", 1.0),
+                ("energy_buffer", 10000.0),
+                ("yf_per_tick", 100.0),
+            ].into(),
+            model: None,
+            link_groups: vec!["pipe_energy".into(), "energy_producer".into(), "energy_consumer".into()],
+        }).unwrap();
+
+        // ── Example 7: Custom pipe kind ("mana" from a magic mod) ────────────
+        register_pipe(registry, PipeDef {
+            block_id: "example:mana_pipe_crystal".into(),
+            kind: PipeKind::Custom("mymod:mana".into()),
+            properties: [
+                ("mana_per_tick", 50.0),
+                ("range", 32.0),
+                ("purity_required", 0.8),
+            ].into(),
+            model: None,
+            link_groups: vec!["pipe_mana".into(), "mana_source".into(), "mana_consumer".into()],
+        }).unwrap();
+
+        // ── Example 8: No recipe — mod adds its own ─────────────────────────
+        // The framework never generates recipes. If a mod wants one:
+        // registry.add_shaped_recipe(
+        //     yog_api::ShapedRecipe::new("example:pipe_iron", "example:item_pipe_stone", 1)
+        //         .row("III")
+        //         .row("IGI")
+        //         .row("III")
+        //         .key('I', "minecraft:iron_ingot")
+        //         .key('G', "minecraft:glass_pane")
+        // );
     }
 }
 
