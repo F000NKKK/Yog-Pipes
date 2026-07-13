@@ -48,18 +48,29 @@ pub fn rebuild_graph(dim: &str, x: i32, y: i32, z: i32) {
     queue.push_back(start.clone());
 
     while let Some(current) = queue.pop_front() {
-        if visited.contains(&current) { continue; }
+        if visited.contains(&current) {
+            continue;
+        }
         visited.insert(current.clone());
 
         // Scan 6 neighbor directions
-        for (dx, dy, dz) in &[(1,0,0), (-1,0,0), (0,1,0), (0,-1,0), (0,0,1), (0,0,-1)] {
+        for (dx, dy, dz) in &[
+            (1, 0, 0),
+            (-1, 0, 0),
+            (0, 1, 0),
+            (0, -1, 0),
+            (0, 0, 1),
+            (0, 0, -1),
+        ] {
             let neighbor: NodeKey = (
                 current.0.clone(),
                 current.1 + dx,
                 current.2 + dy,
                 current.3 + dz,
             );
-            if visited.contains(&neighbor) { continue; }
+            if visited.contains(&neighbor) {
+                continue;
+            }
             // TODO: query world for pipe/inventory at neighbor via Server API
             // For now, mark all 6 neighbors as connected
             graph.edges.insert((current.clone(), neighbor.clone()));
@@ -78,14 +89,24 @@ pub fn propagate_signals(source: NodeKey, strength: u8) {
     queue.push_back((source.clone(), strength));
 
     while let Some((current, sig)) = queue.pop_front() {
-        if sig == 0 { continue; }
+        if sig == 0 {
+            continue;
+        }
         let entry = visited.entry(current.clone()).or_insert(0);
-        if *entry >= sig { continue; }
+        if *entry >= sig {
+            continue;
+        }
         *entry = sig;
 
         for edge in &graph.edges {
             let (a, b) = edge;
-            let next = if a == &current { b } else if b == &current { a } else { continue };
+            let next = if a == &current {
+                b
+            } else if b == &current {
+                a
+            } else {
+                continue;
+            };
             let next_sig = sig.saturating_sub(1);
             if next_sig > 0 {
                 queue.push_back((next.clone(), next_sig));
@@ -124,8 +145,16 @@ pub fn find_path(from: &NodeKey, to: &NodeKey) -> Option<Vec<NodeKey>> {
         }
         for edge in &graph.edges {
             let (a, b) = edge;
-            let next = if a == &current { b } else if b == &current { a } else { continue };
-            if came_from.contains_key(next) { continue; }
+            let next = if a == &current {
+                b
+            } else if b == &current {
+                a
+            } else {
+                continue;
+            };
+            if came_from.contains_key(next) {
+                continue;
+            }
             came_from.insert(next.clone(), current.clone());
             queue.push_back(next.clone());
         }

@@ -71,9 +71,8 @@ use yog_api::{Mod, Registry};
 
 // Re-export all public types
 pub use framework::{
-    PipeKind, PipeDef, ModelDef, ModelElement, FaceDef, ElementRotation,
-    RegisterPipeArgs,
-    register_pipe, register_pipe_interop,
+    register_pipe, register_pipe_interop, ElementRotation, FaceDef, ModelDef, ModelElement,
+    PipeDef, PipeKind, RegisterPipeArgs,
 };
 
 // ── Mod entry point ──────────────────────────────────────────────────────────
@@ -92,15 +91,23 @@ impl Mod for YogPipesMod {
 
         // Infrastructure: rebuild graph when any pipe block is placed or broken
         registry.on_player_place_block(|e, phase, _srv| {
-            if phase != yog_api::EventPhase::Post { return true; }
-            if !e.block_id.contains(":pipe_") { return true; }
+            if phase != yog_api::EventPhase::Post {
+                return true;
+            }
+            if !e.block_id.contains(":pipe_") {
+                return true;
+            }
             graph::rebuild_graph("overworld", e.pos.x, e.pos.y, e.pos.z);
             true
         });
 
         registry.on_block_break(|e, phase, _srv| {
-            if phase != yog_api::EventPhase::Post { return true; }
-            if !e.block_id.contains(":pipe_") { return true; }
+            if phase != yog_api::EventPhase::Post {
+                return true;
+            }
+            if !e.block_id.contains(":pipe_") {
+                return true;
+            }
             graph::rebuild_graph("overworld", e.pos.x, e.pos.y, e.pos.z);
             true
         });

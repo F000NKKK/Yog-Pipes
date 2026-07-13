@@ -30,8 +30,8 @@
 //! }).unwrap();
 //! ```
 
-use yog_api::yog_export;
 use std::collections::HashMap;
+use yog_api::yog_export;
 
 // ── Pipe kind ────────────────────────────────────────────────────────────────
 
@@ -183,10 +183,7 @@ pub fn register_pipe(registry: &mut yog_api::Registry, def: PipeDef) -> Result<(
     let kind_str = kind_display_name(&def.kind);
     let tooltip = build_tooltip(&kind_str, &def.properties);
 
-    registry.register_item(
-        yog_api::ItemDef::new(&def.block_id)
-            .tooltip(tooltip)
-    );
+    registry.register_item(yog_api::ItemDef::new(&def.block_id).tooltip(tooltip));
 
     Ok(())
 }
@@ -206,8 +203,12 @@ fn resolve_shape(model: &Option<ModelDef>) -> (f32, f32, f32, f32, f32, f32) {
             }
             // Scale from 0..16 to -8..8 (Minecraft block space)
             return (
-                min[0] - 8.0, min[1] - 8.0, min[2] - 8.0,
-                max[0] - 8.0, max[1] - 8.0, max[2] - 8.0,
+                min[0] - 8.0,
+                min[1] - 8.0,
+                min[2] - 8.0,
+                max[0] - 8.0,
+                max[1] - 8.0,
+                max[2] - 8.0,
             );
         }
     }
@@ -262,8 +263,16 @@ fn build_tooltip(kind: &str, props: &HashMap<String, f64>) -> String {
 
     // Add any custom properties that aren't standard
     for (k, v) in props {
-        if !["speed", "tick_interval", "signal_range", "energy_buffer",
-              "fluid_capacity", "temperature_max", "pressure_max"].contains(&k.as_str())
+        if ![
+            "speed",
+            "tick_interval",
+            "signal_range",
+            "energy_buffer",
+            "fluid_capacity",
+            "temperature_max",
+            "pressure_max",
+        ]
+        .contains(&k.as_str())
         {
             parts.push(format!("§7{}: §b{}", k, v));
         }
@@ -288,6 +297,7 @@ pub struct RegisterPipeArgs {
 /// This function is exported under the `__yog_wrap_register_pipe` symbol.
 #[yog_export]
 pub fn register_pipe_interop(args: RegisterPipeArgs) -> Result<(), String> {
-    let mut registry = unsafe { yog_api::Registry::from_raw(args.api_ptr as *const yog_api::YogApi) };
+    let mut registry =
+        unsafe { yog_api::Registry::from_raw(args.api_ptr as *const yog_api::YogApi) };
     register_pipe(&mut registry, args.def)
 }

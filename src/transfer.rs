@@ -19,13 +19,23 @@ pub enum TransferState {
     /// Pulling from a source inventory.
     Extracting { from: NodeKey, slot: usize },
     /// Finding path to destination.
-    Routing { from: NodeKey, to: NodeKey, path: Vec<NodeKey> },
+    Routing {
+        from: NodeKey,
+        to: NodeKey,
+        path: Vec<NodeKey>,
+    },
     /// Pushing into a destination.
-    Inserting { to: NodeKey, slot: usize, kind: PipeKind, amount: u64 },
+    Inserting {
+        to: NodeKey,
+        slot: usize,
+        kind: PipeKind,
+        amount: u64,
+    },
 }
 
 /// Global transfer state.
-pub static TRANSFER: LazyLock<Mutex<TransferState>> = LazyLock::new(|| Mutex::new(TransferState::Idle));
+pub static TRANSFER: LazyLock<Mutex<TransferState>> =
+    LazyLock::new(|| Mutex::new(TransferState::Idle));
 
 /// Tick counter.
 pub static TICK: LazyLock<Mutex<u64>> = LazyLock::new(|| Mutex::new(0));
@@ -44,11 +54,20 @@ pub fn transfer_tick(_srv: &dyn yog_api::Server) {
             // TODO: extract from source
             *state = TransferState::Idle;
         }
-        TransferState::Routing { from: _, to: _, path: _ } => {
+        TransferState::Routing {
+            from: _,
+            to: _,
+            path: _,
+        } => {
             // Path already computed; proceed to insert
             *state = TransferState::Idle;
         }
-        TransferState::Inserting { to: _, slot: _, kind: _, amount: _ } => {
+        TransferState::Inserting {
+            to: _,
+            slot: _,
+            kind: _,
+            amount: _,
+        } => {
             // TODO: insert into destination
             *state = TransferState::Idle;
         }
@@ -64,7 +83,12 @@ pub fn schedule(from: NodeKey, to: NodeKey, amount: u64, kind: PipeKind) {
         Some(p) => *state = TransferState::Routing { from, to, path: p },
         None => {
             // No path — insert directly if adjacent
-            *state = TransferState::Inserting { to, slot: 0, kind, amount };
+            *state = TransferState::Inserting {
+                to,
+                slot: 0,
+                kind,
+                amount,
+            };
         }
     }
 }
