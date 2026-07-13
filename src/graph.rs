@@ -1,23 +1,23 @@
 //! Virtual pipe graph — BFS-based adjacency network.
 //!
 //! When a pipe is placed or broken, the graph is rebuilt from that position
-//! via BFS through `connect_groups`-linked neighbors. Nodes represent pipe
-//! blocks and adjacent inventories. Edges represent connections.
+//! via BFS through real world blocks: a neighbor becomes an edge only when
+//! it is itself a block registered via `crate::pipe::register_pipe` (see
+//! `crate::pipe::is_pipe_block`) — never guessed from the block id's
+//! spelling and never assumed present without checking the world.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{LazyLock, Mutex};
+
+use yog_api::BlockPos;
 
 /// A position in the world: (dimension, x, y, z).
 pub type NodeKey = (String, i32, i32, i32);
 
 /// A node in the pipe graph.
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)] // energy fields await the Energy pipe kind's transfer step
 pub struct PipeNode {
-    pub pos: NodeKey,
-    pub is_source: bool,
-    pub is_sink: bool,
-    pub signal_in: u8,
     pub signal_out: u8,
     /// Energy buffer (for Yog Flux pipes).
     pub energy: u64,
@@ -30,7 +30,6 @@ pub type PipeEdge = (NodeKey, NodeKey);
 
 /// The full pipe network graph.
 #[derive(Debug, Clone, Default)]
-#[allow(dead_code)]
 pub struct PipeGraph {
     pub nodes: HashMap<NodeKey, PipeNode>,
     pub edges: HashSet<PipeEdge>,
@@ -39,49 +38,78 @@ pub struct PipeGraph {
 /// Global pipe graph, rebuilt on placement/break.
 pub static GRAPH: LazyLock<Mutex<PipeGraph>> = LazyLock::new(|| Mutex::new(PipeGraph::default()));
 
-/// Rebuild the graph around `pos` using BFS through connected pipes.
-pub fn rebuild_graph(dim: &str, x: i32, y: i32, z: i32) {
+const NEIGHBOR_OFFSETS: [(i32, i32, i32); 6] = [
+    (1, 0, 0),
+    (-1, 0, 0),
+    (0, 1, 0),
+    (0, -1, 0),
+    (0, 0, 1),
+    (0, 0, -1),
+];
+
+fn is_pipe_at(world: &yog_api::World, pos: &NodeKey) -> bool {
+    world
+        .get_block(BlockPos {
+            x: pos.1,
+            y: pos.2,
+            z: pos.3,
+        })
+        .map(|id| crate::pipe::is_pipe_block(&id))
+        .unwrap_or(false)
+}
+
+/// Rebuild the graph around `pos` using BFS through pipe blocks actually
+/// present in the world (`srv`/`dim` resolve real block ids via
+/// `yog_api::World`, never assumed).
+pub fn rebuild_graph(srv: &dyn yog_api::Server, dim: &str, x: i32, y: i32, z: i32) {
+    let world = yog_api::World::new(srv, dim);
     let mut graph = GRAPH.lock().unwrap();
+
+    // Drop stale edges/nodes touching a position that's no longer a pipe —
+    // covers both the break case and pipes removed elsewhere in the network.
+    graph
+        .edges
+        .retain(|(a, b)| is_pipe_at(&world, a) && is_pipe_at(&world, b));
+    graph.nodes.retain(|pos, _| is_pipe_at(&world, pos));
+
     let start: NodeKey = (dim.to_string(), x, y, z);
+    if !is_pipe_at(&world, &start) {
+        return;
+    }
+
     let mut visited: HashSet<NodeKey> = HashSet::new();
     let mut queue: VecDeque<NodeKey> = VecDeque::new();
-    queue.push_back(start.clone());
+    queue.push_back(start);
 
     while let Some(current) = queue.pop_front() {
         if visited.contains(&current) {
             continue;
         }
         visited.insert(current.clone());
+        graph.nodes.entry(current.clone()).or_default();
 
-        // Scan 6 neighbor directions
-        for (dx, dy, dz) in &[
-            (1, 0, 0),
-            (-1, 0, 0),
-            (0, 1, 0),
-            (0, -1, 0),
-            (0, 0, 1),
-            (0, 0, -1),
-        ] {
+        for (dx, dy, dz) in NEIGHBOR_OFFSETS {
             let neighbor: NodeKey = (
                 current.0.clone(),
                 current.1 + dx,
                 current.2 + dy,
                 current.3 + dz,
             );
-            if visited.contains(&neighbor) {
+            if !is_pipe_at(&world, &neighbor) {
                 continue;
             }
-            // TODO: query world for pipe/inventory at neighbor via Server API
-            // For now, mark all 6 neighbors as connected
             graph.edges.insert((current.clone(), neighbor.clone()));
-            queue.push_back(neighbor);
+            if !visited.contains(&neighbor) {
+                queue.push_back(neighbor);
+            }
         }
     }
 }
 
-/// Propagate redstone signal through the pipe graph via BFS with attenuation.
-/// Each hop reduces signal strength by 1.
-#[allow(dead_code)]
+/// Propagate a signal through the pipe graph via BFS with attenuation.
+/// Each hop reduces signal strength by 1 — call after changing the value a
+/// source node emits (event-driven, like vanilla redstone, rather than
+/// recomputed every tick).
 pub fn propagate_signals(source: NodeKey, strength: u8) {
     let graph = GRAPH.lock().unwrap();
     let mut queue: VecDeque<(NodeKey, u8)> = VecDeque::new();
@@ -117,10 +145,20 @@ pub fn propagate_signals(source: NodeKey, strength: u8) {
 
     let mut graph = GRAPH.lock().unwrap();
     for (pos, sig) in &visited {
-        if let Some(node) = graph.nodes.get_mut(pos) {
-            node.signal_out = *sig;
-        }
+        graph.nodes.entry(pos.clone()).or_default().signal_out = *sig;
     }
+}
+
+/// Current signal level the graph has computed at `pos` (0 if the position
+/// isn't a known node, or no signal has propagated there yet).
+pub fn signal_at(pos: &NodeKey) -> u8 {
+    GRAPH
+        .lock()
+        .unwrap()
+        .nodes
+        .get(pos)
+        .map(|n| n.signal_out)
+        .unwrap_or(0)
 }
 
 /// Find the shortest path between two nodes using BFS.
@@ -133,7 +171,6 @@ pub fn find_path(from: &NodeKey, to: &NodeKey) -> Option<Vec<NodeKey>> {
 
     while let Some(current) = queue.pop_front() {
         if &current == to {
-            // Reconstruct path
             let mut path = vec![current.clone()];
             let mut cur = current;
             while let Some(prev) = came_from.get(&cur) {
