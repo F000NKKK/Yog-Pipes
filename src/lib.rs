@@ -33,12 +33,9 @@
 //! ### Interop
 //!
 //! ```ignore
-//! use yog_exports::yog_pipes::{PipeKind, PipeDef, RegisterPipeArgs};
+//! use yog_exports::yog_pipes::{PipeKind, PipeDef};
 //!
-//! yog_exports::yog_pipes::register_pipe(RegisterPipeArgs {
-//!     api_ptr: registry.raw_api() as usize,
-//!     def: PipeDef { ... },
-//! }).unwrap();
+//! yog_exports::yog_pipes::register_pipe(PipeDef { ... }).unwrap();
 //! ```
 //!
 //! ### Custom 3D model
@@ -71,8 +68,7 @@ use yog_api::{Mod, Registry};
 
 // Re-export all public types
 pub use framework::{
-    register_pipe, register_pipe_interop, ElementRotation, FaceDef, ModelDef, ModelElement,
-    PipeDef, PipeKind, RegisterPipeArgs,
+    register_pipe, ElementRotation, FaceDef, ModelDef, ModelElement, PipeDef, PipeKind,
 };
 
 // ── Mod entry point ──────────────────────────────────────────────────────────
@@ -83,11 +79,9 @@ impl Mod for YogPipesMod {
     fn register(registry: &mut Registry) {
         yog_api::info!("[yog-pipes] pipe transport framework ready.");
 
-        // Export `register_pipe` for interop consumers
-        registry.interop().export(
-            "register_pipe",
-            register_pipe_interop as *const std::ffi::c_void,
-        );
+        // `register_pipe` is auto-registered for interop consumers via its
+        // own `#[yog_export]` ctor — no manual `registry.interop().export()`
+        // call needed here.
 
         // Infrastructure: rebuild graph when any pipe block is placed or broken
         registry.on_player_place_block(|e, phase, _srv| {

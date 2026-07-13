@@ -31,7 +31,6 @@ All types are re-exported from `yog_pipes`:
 | `ModelElement` | A single cube in the model (`from`/`to` in voxel space) |
 | `FaceDef` | Per-face texture + UV coordinates |
 | `ElementRotation` | Rotation of a model element |
-| `RegisterPipeArgs` | Serialisable args for interop calls (rkyv) |
 | `register_pipe()` | Register one pipe block + item |
 
 ## Philosophy
@@ -60,14 +59,17 @@ register_pipe(registry, PipeDef {
 
 ### Interop (no compile-time linking)
 
-Add `yog-pipes` to `[dependencies]` in `yog.toml` — `yog build` maps it to the exports crate:
+Add `yog-pipes` to `[dependencies]` in `yog.toml` — `yog build` maps it to the exports crate. `register_pipe` is exported via `#[yog_export]`, so it's called exactly like the direct-dependency version above — no wrapper args struct, no `api_ptr` to pass by hand:
 
 ```rust
-use yog_exports::yog_pipes::{PipeKind, PipeDef, RegisterPipeArgs};
+use yog_exports::yog_pipes::{PipeKind, PipeDef};
 
-yog_exports::yog_pipes::register_pipe(RegisterPipeArgs {
-    api_ptr: registry.raw_api() as usize,
-    def: PipeDef { ... },
+yog_exports::yog_pipes::register_pipe(PipeDef {
+    block_id: "mymod:pipe_iron".into(),
+    kind: PipeKind::Item,
+    properties: [("speed", 2.0), ("tick_interval", 15.0)].into(),
+    model: None,
+    link_groups: vec!["pipe_item".into(), "inventory".into()],
 }).unwrap();
 ```
 

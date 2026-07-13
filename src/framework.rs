@@ -159,6 +159,7 @@ pub struct PipeDef {
 ///     link_groups: vec!["pipe_item".into(), "inventory".into()],
 /// }).unwrap();
 /// ```
+#[yog_export]
 pub fn register_pipe(registry: &mut yog_api::Registry, def: PipeDef) -> Result<(), String> {
     let shape = resolve_shape(&def.model);
 
@@ -281,23 +282,3 @@ fn build_tooltip(kind: &str, props: &HashMap<String, f64>) -> String {
     parts.join("\n")
 }
 
-// ── Interop registration (for mods that can't depend directly) ───────────────
-
-/// Serialisable arguments for the interop call.
-#[yog_export]
-pub struct RegisterPipeArgs {
-    /// Raw `YogApi` pointer from `Registry::raw_api()`.
-    pub api_ptr: usize,
-    /// Pipe definition.
-    pub def: PipeDef,
-}
-
-/// Interop entry point — called by mods via `registry.interop().call("register_pipe", &args)`.
-///
-/// This function is exported under the `__yog_wrap_register_pipe` symbol.
-#[yog_export]
-pub fn register_pipe_interop(args: RegisterPipeArgs) -> Result<(), String> {
-    let mut registry =
-        unsafe { yog_api::Registry::from_raw(args.api_ptr as *const yog_api::YogApi) };
-    register_pipe(&mut registry, args.def)
-}
