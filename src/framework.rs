@@ -7,8 +7,9 @@
 //!
 //! - **No fixed fields** — `PipeDef` carries an open `properties` map instead
 //!   of a rigid `PipeTier` struct. Mods define whatever parameters they need.
-//! - **No recipes** — the framework never generates recipes. Mods register
-//!   their own via `registry.add_shaped_recipe()` if they want crafting.
+//! - **Recipes as data** — `PipeDef::recipe` carries an arbitrary shaped
+//!   recipe (any pattern, any ingredients, any output count). Leave it
+//!   `None` to register no recipe, or add one separately.
 //! - **3D models** — `ModelDef` lets mods describe block models with
 //!   per-face textures, elements, and rotation — no JSON files needed.
 //! - **Link groups** — control which blocks pipes connect to.
@@ -109,13 +110,28 @@ pub struct ElementRotation {
     pub rescale: bool,
 }
 
+/// A shaped crafting recipe for a pipe's item, as plain data — any pattern,
+/// any ingredients, any output count. Passed through [`PipeDef::recipe`] so
+/// mods never need their own `registry.add_shaped_recipe()` call for a pipe.
+#[derive(Debug, Clone)]
+#[yog_export]
+pub struct RecipeDef {
+    /// Shaped recipe rows, top to bottom (e.g. `["RRR"]` for a 1×3 grid).
+    pub rows: Vec<String>,
+    /// Symbol → ingredient item/block id, as used in `rows`.
+    pub keys: Vec<(char, String)>,
+    /// Output stack size.
+    pub result_count: u32,
+}
+
 // ── Pipe definition ──────────────────────────────────────────────────────────
 
 /// Registration entry for one pipe block+item.
 ///
 /// This is intentionally minimal — the framework does **not** dictate:
 /// - What properties a pipe has (use `properties` map)
-/// - What recipe it uses (register separately via `registry.add_shaped_recipe()`)
+/// - What recipe it uses (use `recipe`, or leave `None` and register one
+///   separately via `registry.add_shaped_recipe()`)
 /// - What model it has (use `model` field or leave `None` for default)
 #[derive(Debug, Clone)]
 #[yog_export]
@@ -141,6 +157,9 @@ pub struct PipeDef {
     pub model: Option<ModelDef>,
     /// Connect groups for automatic neighbor linking.
     pub link_groups: Vec<String>,
+    /// Crafting recipe for this pipe's item. `None` = no recipe registered
+    /// (mods can still add their own separately if they prefer).
+    pub recipe: Option<RecipeDef>,
 }
 
 // ── Registration helper ──────────────────────────────────────────────────────
@@ -185,6 +204,21 @@ pub fn register_pipe(registry: &mut yog_api::Registry, def: PipeDef) -> Result<(
     let tooltip = build_tooltip(&kind_str, &def.properties);
 
     registry.register_item(yog_api::ItemDef::new(&def.block_id).tooltip(tooltip));
+
+    if let Some(recipe) = &def.recipe {
+        let mut r = yog_api::ShapedRecipe::new(
+            format!("{}_craft", def.block_id),
+            &def.block_id,
+            recipe.result_count,
+        );
+        for row in &recipe.rows {
+            r = r.row(row.clone());
+        }
+        for (symbol, ingredient) in &recipe.keys {
+            r = r.key(*symbol, ingredient.clone());
+        }
+        registry.add_shaped_recipe(r);
+    }
 
     Ok(())
 }
