@@ -140,6 +140,8 @@ impl Mod for YogPipesMod {
         // actually changes), not tick-polled — there is deliberately no
         // `on_tick` hook here dictating how/when payloads move; that's each
         // producing mod's call.
+
+        info!("[yog-pipes] ready.");
     }
 }
 
