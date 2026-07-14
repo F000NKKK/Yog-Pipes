@@ -1,7 +1,7 @@
 [mod]
 id          = "yog-pipes"
 name        = "Yog Pipes"
-version     = "0.3.0"
+version     = "0.3.1"
 description = "Universal bridge framework for Yog mods — transfer items, fluids, signals, and any energy type between blocks. Built-in signal propagation lets blocks communicate through the pipe network. Extensible energy system supports Yog Flux (YF), Redstone Flux (RF), Forge Energy (FE), EU, and custom types."
 authors     = ["Yog Team"]
 license     = "AGPL-3.0-only"

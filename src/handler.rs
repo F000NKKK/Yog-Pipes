@@ -34,7 +34,7 @@ pub fn dispatch(registry: &mut yog_api::Registry, pos: &NodeKey, payload: &PipeP
     let Some((mod_id, symbol)) = HANDLERS.lock().unwrap().get(pos).cloned() else {
         return;
     };
-    let Some(ptr) = registry.interop().import_raw(&mod_id, &symbol) else {
+    let Some(ptr) = (unsafe { registry.interop().import_raw(&mod_id, &symbol) }) else {
         return;
     };
 
