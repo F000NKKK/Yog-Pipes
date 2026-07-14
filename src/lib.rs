@@ -82,7 +82,7 @@ mod pipe;
 mod recipe;
 mod transport;
 
-use yog_api::{Mod, Registry};
+use yog_api::{info, Mod, Registry};
 
 // Re-export all public types
 pub use kind::PipeKind;
@@ -98,7 +98,7 @@ pub struct YogPipesMod;
 
 impl Mod for YogPipesMod {
     fn register(registry: &mut Registry) {
-        yog_api::info!("[yog-pipes] pipe transport framework ready.");
+        info!("[yog-pipes] pipe transport framework ready.");
 
         // `register_pipe`/`broadcast`/`send`/etc. are auto-registered for
         // interop consumers via their own `#[yog_export]` ctors — no manual
