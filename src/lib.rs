@@ -110,7 +110,12 @@ impl Mod for YogPipesMod {
         // mod's own `set_block`) are picked up lazily or via `refresh`.
         registry.on_player_place_block(|e, phase, srv| {
             if phase == yog_api::EventPhase::Post && pipe::is_pipe_block(&e.block_id) {
-                let node = (graph::normalize_dim(&e.dimension), e.pos.x, e.pos.y, e.pos.z);
+                let node = (
+                    graph::normalize_dim(&e.dimension),
+                    e.pos.x,
+                    e.pos.y,
+                    e.pos.z,
+                );
                 graph::on_placed(node, &graph::world_probe(srv));
             }
             true
@@ -118,7 +123,12 @@ impl Mod for YogPipesMod {
 
         registry.on_block_break(|e, phase, _srv| {
             if phase == yog_api::EventPhase::Post && pipe::is_pipe_block(&e.block_id) {
-                graph::on_removed(&(graph::normalize_dim(&e.dimension), e.pos.x, e.pos.y, e.pos.z));
+                graph::on_removed(&(
+                    graph::normalize_dim(&e.dimension),
+                    e.pos.x,
+                    e.pos.y,
+                    e.pos.z,
+                ));
             }
             true
         });

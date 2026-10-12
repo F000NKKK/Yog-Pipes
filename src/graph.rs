@@ -77,7 +77,11 @@ impl PipeGraph {
     /// positions the graph doesn't know yet: a known neighbor gets linked to
     /// the new node but isn't re-explored, since its own edges are already
     /// correct. Returns how many nodes were added.
-    fn discover(&mut self, start: NodeKey, probe: &dyn Fn(&NodeKey) -> Option<Vec<String>>) -> usize {
+    fn discover(
+        &mut self,
+        start: NodeKey,
+        probe: &dyn Fn(&NodeKey) -> Option<Vec<String>>,
+    ) -> usize {
         let Some(groups) = probe(&start) else {
             return 0;
         };
@@ -472,7 +476,10 @@ mod tests {
     fn dimensions_are_independent() {
         let mut w = Fake::new();
         w.put(0, 0, 0, &["item"]);
-        w.0.insert(("minecraft:the_nether".into(), 1, 0, 0), vec!["item".into()]);
+        w.0.insert(
+            ("minecraft:the_nether".into(), 1, 0, 0),
+            vec!["item".into()],
+        );
         let mut g = PipeGraph::default();
         g.discover(key(0, 0, 0), &w.probe());
         assert_eq!(g.neighbors(&key(0, 0, 0)).count(), 0);
