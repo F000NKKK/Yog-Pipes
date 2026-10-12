@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 
-use crate::graph::NodeKey;
+use crate::graph::{lock, NodeKey};
 use crate::payload::PipePayload;
 
 /// Position → (mod id, exported symbol name) that should receive payloads
@@ -19,11 +19,17 @@ static HANDLERS: LazyLock<Mutex<HashMap<NodeKey, (String, String)>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub fn bind(pos: NodeKey, mod_id: String, symbol: String) {
-    HANDLERS.lock().unwrap().insert(pos, (mod_id, symbol));
+    lock(&HANDLERS).insert(pos, (mod_id, symbol));
 }
 
 pub fn unbind(pos: &NodeKey) {
-    HANDLERS.lock().unwrap().remove(pos);
+    lock(&HANDLERS).remove(pos);
+}
+
+/// Drop every binding — called when the server stops, since positions
+/// from one world mean nothing in the next one loaded.
+pub fn clear() {
+    lock(&HANDLERS).clear();
 }
 
 /// If a handler is bound at `pos`, resolve it via the interop table and
@@ -31,7 +37,7 @@ pub fn unbind(pos: &NodeKey) {
 /// or if the bound mod/symbol isn't (yet) resolvable — the same tolerance
 /// `__yog_resolve_pending_imports` already applies to ordinary imports.
 pub fn dispatch(registry: &mut yog_api::Registry, pos: &NodeKey, payload: &PipePayload) {
-    let Some((mod_id, symbol)) = HANDLERS.lock().unwrap().get(pos).cloned() else {
+    let Some((mod_id, symbol)) = lock(&HANDLERS).get(pos).cloned() else {
         return;
     };
     let Some(ptr) = (unsafe { registry.interop().import_raw(&mod_id, &symbol) }) else {

@@ -46,16 +46,22 @@ pub struct PipeDef {
     pub recipe: Vec<RecipeDef>,
 }
 
-/// Every block id ever registered via [`register_pipe`], with the
-/// [`PipeKind`] it carries — the graph (`crate::graph`) consults this to
-/// decide whether a world position holds a pipe, instead of guessing from
-/// the block id's spelling.
-static PIPE_BLOCKS: LazyLock<Mutex<HashMap<String, PipeKind>>> =
+/// Every block id ever registered via [`register_pipe`], with its link
+/// groups — the graph
+/// (`crate::graph`) consults this to decide whether a world position holds
+/// a pipe and which neighbors it links to, instead of guessing from the
+/// block id's spelling.
+static PIPE_BLOCKS: LazyLock<Mutex<HashMap<String, Vec<String>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Whether `block_id` was registered as a pipe via [`register_pipe`].
 pub fn is_pipe_block(block_id: &str) -> bool {
-    PIPE_BLOCKS.lock().unwrap().contains_key(block_id)
+    crate::graph::lock(&PIPE_BLOCKS).contains_key(block_id)
+}
+
+/// The link groups of `block_id` if it's a registered pipe, else `None`.
+pub fn pipe_groups(block_id: &str) -> Option<Vec<String>> {
+    crate::graph::lock(&PIPE_BLOCKS).get(block_id).cloned()
 }
 
 /// Register one pipe block + item.
@@ -95,14 +101,9 @@ pub fn register_pipe(registry: &mut yog_api::Registry, def: PipeDef) -> Result<(
     let tooltip = build_tooltip(kind_str, &def.properties);
     registry.register_item(yog_api::ItemDef::new(&def.block_id).tooltip(tooltip));
 
-    for r in &def.recipe {
-        recipe::register(registry, &def.block_id, r);
-    }
+    recipe::register_all(registry, &def.block_id, &def.recipe);
 
-    PIPE_BLOCKS
-        .lock()
-        .unwrap()
-        .insert(def.block_id.clone(), def.kind.clone());
+    crate::graph::lock(&PIPE_BLOCKS).insert(def.block_id.clone(), def.link_groups.clone());
 
     Ok(())
 }

@@ -34,8 +34,29 @@ pub enum RecipeDef {
     },
 }
 
-/// Register `recipe` against `block_id`'s crafting output.
-pub fn register(registry: &mut yog_api::Registry, block_id: &str, recipe: &RecipeDef) {
+/// Register every recipe in `recipes` against `block_id`'s crafting output.
+/// The first recipe of each kind keeps the plain id (`<block>_craft_shaped`,
+/// …); later ones get a `_2`, `_3`, … suffix so they don't overwrite it.
+pub fn register_all(registry: &mut yog_api::Registry, block_id: &str, recipes: &[RecipeDef]) {
+    let mut seen: [u32; 3] = [0; 3];
+    for r in recipes {
+        let slot = match r {
+            RecipeDef::Shaped { .. } => 0,
+            RecipeDef::Shapeless { .. } => 1,
+            RecipeDef::Furnace { .. } => 2,
+        };
+        seen[slot] += 1;
+        let suffix = match seen[slot] {
+            1 => String::new(),
+            n => format!("_{n}"),
+        };
+        register(registry, block_id, r, &suffix);
+    }
+}
+
+/// Register `recipe` against `block_id`'s crafting output, with `suffix`
+/// appended to its recipe id.
+fn register(registry: &mut yog_api::Registry, block_id: &str, recipe: &RecipeDef, suffix: &str) {
     match recipe {
         RecipeDef::Shaped {
             rows,
@@ -43,7 +64,7 @@ pub fn register(registry: &mut yog_api::Registry, block_id: &str, recipe: &Recip
             result_count,
         } => {
             let mut r = yog_api::ShapedRecipe::new(
-                format!("{block_id}_craft_shaped"),
+                format!("{block_id}_craft_shaped{suffix}"),
                 block_id,
                 *result_count,
             );
@@ -60,7 +81,7 @@ pub fn register(registry: &mut yog_api::Registry, block_id: &str, recipe: &Recip
             result_count,
         } => {
             let mut r = yog_api::ShapelessRecipe::new(
-                format!("{block_id}_craft_shapeless"),
+                format!("{block_id}_craft_shapeless{suffix}"),
                 block_id,
                 *result_count,
             );
@@ -76,7 +97,7 @@ pub fn register(registry: &mut yog_api::Registry, block_id: &str, recipe: &Recip
             cook_time,
         } => {
             let mut r = yog_api::FurnaceRecipe::new(
-                format!("{block_id}_smelt"),
+                format!("{block_id}_smelt{suffix}"),
                 input.clone(),
                 block_id,
                 *result_count,

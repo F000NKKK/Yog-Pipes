@@ -21,8 +21,21 @@ pub struct PipePos {
 }
 
 impl From<PipePos> for graph::NodeKey {
+    /// Bare dimension ids (`"overworld"`) are namespaced on the way in, so
+    /// `PipePos` accepts both spellings.
     fn from(p: PipePos) -> Self {
-        (p.dim, p.x, p.y, p.z)
+        (graph::normalize_dim(&p.dim), p.x, p.y, p.z)
+    }
+}
+
+/// Make sure the network around `node` is in the graph, discovering it from
+/// the live world if not — a network built before a restart is unknown
+/// until something touches it. Without a server (client side) this only
+/// reports whether the node is already known.
+fn ensure_known(node: &graph::NodeKey) -> bool {
+    match yog_api::server() {
+        Some(srv) => graph::ensure_known(node, &graph::world_probe(&srv)),
+        None => graph::ensure_known(node, &|_: &graph::NodeKey| None),
     }
 }
 
@@ -39,6 +52,7 @@ pub fn broadcast(
     payload: PipePayload,
 ) -> Result<(), String> {
     let node: graph::NodeKey = pos.into();
+    ensure_known(&node);
     let reached = graph::deliver_broadcast(node, payload.clone());
     for n in &reached {
         handler::dispatch(registry, n, &payload);
@@ -59,6 +73,9 @@ pub fn send(
 ) -> Result<bool, String> {
     let from_node: graph::NodeKey = from.into();
     let to_node: graph::NodeKey = to.into();
+    if !ensure_known(&from_node) || !ensure_known(&to_node) {
+        return Ok(false);
+    }
     if graph::find_path(&from_node, &to_node).is_none() {
         return Ok(false);
     }
@@ -74,9 +91,24 @@ pub fn read(pos: PipePos) -> Result<Option<PipePayload>, String> {
     Ok(graph::payload_at(&pos.into()))
 }
 
+/// Re-read the network around `pos` from the world. Placing and breaking
+/// by players and explosions are tracked automatically; call this after
+/// changing pipes any other way (your own `set_block`, a structure
+/// template, `/setblock`), with `pos` being any pipe of the affected network
+/// or the position a pipe was removed from.
+#[yog_export]
+pub fn refresh(pos: PipePos) -> Result<(), String> {
+    let node: graph::NodeKey = pos.into();
+    let srv = yog_api::server().ok_or("no server available")?;
+    graph::rebuild_around(&node, &graph::world_probe(&srv));
+    Ok(())
+}
+
 /// Bind a handler at `pos`: whenever a payload is delivered there, the
 /// function `mod_id` exported under `symbol` (an ordinary `#[yog_export]`
-/// function taking one `PipePayload`) is called with it.
+/// function taking one `PipePayload`) is called with it. Bindings live in
+/// memory only and are dropped when the server stops — bind again once the
+/// world is loaded (e.g. from `on_server_started`).
 #[yog_export]
 pub fn bind_handler(pos: PipePos, mod_id: String, symbol: String) -> Result<(), String> {
     handler::bind(pos.into(), mod_id, symbol);

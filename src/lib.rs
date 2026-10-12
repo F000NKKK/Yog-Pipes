@@ -90,7 +90,7 @@ pub use model::{ElementRotation, FaceDef, ModelDef, ModelElement};
 pub use payload::PipePayload;
 pub use pipe::{register_pipe, PipeDef};
 pub use recipe::RecipeDef;
-pub use transport::{bind_handler, broadcast, read, send, unbind_handler, PipePos};
+pub use transport::{bind_handler, broadcast, read, refresh, send, unbind_handler, PipePos};
 
 // ── Mod entry point ──────────────────────────────────────────────────────────
 
@@ -104,36 +104,49 @@ impl Mod for YogPipesMod {
         // interop consumers via their own `#[yog_export]` ctors — no manual
         // `registry.interop().export()` call needed here.
 
-        // Infrastructure: rebuild graph when any pipe block is placed or
-        // broken. `pipe::is_pipe_block` is the only thing that decides
-        // whether a block id is a pipe — never a naming convention.
-        //
-        // Dimension is hardcoded to "overworld": `PlaceBlockEvent`/
-        // `BlockBreakEvent` in yog-event carry no dimension field at all, so
-        // there is currently no way to learn it from these callbacks. Fixing
-        // that is an upstream Yog-Mod-Loader change (new event field, ABI
-        // bump, Java/Mixin plumbing), not something this framework can work
-        // around on its own.
+        // Keep the graph in step with the world. `pipe::is_pipe_block` is the
+        // only thing that decides whether a block id is a pipe — never a
+        // naming convention. Changes made any other way (`/setblock`, a
+        // mod's own `set_block`) are picked up lazily or via `refresh`.
         registry.on_player_place_block(|e, phase, srv| {
-            if phase != yog_api::EventPhase::Post {
-                return true;
+            if phase == yog_api::EventPhase::Post && pipe::is_pipe_block(&e.block_id) {
+                let node = (graph::normalize_dim(&e.dimension), e.pos.x, e.pos.y, e.pos.z);
+                graph::on_placed(node, &graph::world_probe(srv));
             }
-            if !pipe::is_pipe_block(&e.block_id) {
-                return true;
-            }
-            graph::rebuild_graph(srv, "overworld", e.pos.x, e.pos.y, e.pos.z);
             true
         });
 
-        registry.on_block_break(|e, phase, srv| {
-            if phase != yog_api::EventPhase::Post {
-                return true;
+        registry.on_block_break(|e, phase, _srv| {
+            if phase == yog_api::EventPhase::Post && pipe::is_pipe_block(&e.block_id) {
+                graph::on_removed(&(graph::normalize_dim(&e.dimension), e.pos.x, e.pos.y, e.pos.z));
             }
-            if !pipe::is_pipe_block(&e.block_id) {
-                return true;
-            }
-            graph::rebuild_graph(srv, "overworld", e.pos.x, e.pos.y, e.pos.z);
             true
+        });
+
+        // An explosion can take out any number of pipes at once without a
+        // per-block event: re-check the known nodes in its reach. A vanilla
+        // blast ray starts at up to 1.3 × power and loses 0.225 per 0.3-block
+        // step, so it travels at most ~1.75 × power blocks; 2 × power + 2
+        // leaves margin for rounding.
+        registry.on_explosion(|e, phase, srv| {
+            if phase == yog_api::EventPhase::Post {
+                let radius = (e.power.max(0.0) * 2.0).ceil() as i32 + 2;
+                let center = (e.x.floor() as i32, e.y.floor() as i32, e.z.floor() as i32);
+                graph::revalidate_area(
+                    &graph::normalize_dim(&e.dimension),
+                    center,
+                    radius,
+                    &graph::world_probe(srv),
+                );
+            }
+            true
+        });
+
+        // Positions mean nothing once the world is gone — don't carry one
+        // world's networks into the next one opened in the same session.
+        registry.on_server_stopping(|_srv| {
+            graph::clear();
+            handler::clear();
         });
 
         // Transport is event-driven (call `broadcast`/`send` when a value
