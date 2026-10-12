@@ -78,6 +78,7 @@ mod handler;
 mod kind;
 mod model;
 mod payload;
+mod persist;
 mod pipe;
 mod recipe;
 mod transport;
@@ -152,17 +153,23 @@ impl Mod for YogPipesMod {
             true
         });
 
-        // Positions mean nothing once the world is gone — don't carry one
-        // world's networks into the next one opened in the same session.
+        // Stored payloads and handler bindings are saved with the world
+        // (see `persist`); the topology is rediscovered from the world.
+        registry.on_server_started(persist::load);
+
+        // Positions mean nothing once the world is gone — save, then don't
+        // carry one world's networks into the next one opened in the same
+        // session.
         registry.on_server_stopping(|_srv| {
+            persist::unload();
             graph::clear();
             handler::clear();
         });
 
         // Transport is event-driven (call `broadcast`/`send` when a value
-        // actually changes), not tick-polled — there is deliberately no
-        // `on_tick` hook here dictating how/when payloads move; that's each
-        // producing mod's call.
+        // actually changes), not tick-polled — the tick hook below only
+        // autosaves; how/when payloads move is each producing mod's call.
+        registry.on_tick(|_srv| persist::tick());
 
         info!("[yog-pipes] ready.");
     }

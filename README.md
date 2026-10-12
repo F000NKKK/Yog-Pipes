@@ -34,6 +34,7 @@ src/
 ├── payload.rs    # PipePayload — the opaque data+metadata a pipe carries
 ├── transport.rs  # broadcast / send / read / bind_handler / unbind_handler
 ├── handler.rs    # resolves + calls a bound handler via the interop table
+├── persist.rs    # saves payloads + handler bindings with the world
 └── graph.rs      # the virtual pipe network (BFS, branching-safe)
 ```
 
@@ -188,7 +189,7 @@ bind_handler(pos(4, 64, 0), "my-mod".into(), "on_pipe_payload".into()).unwrap();
 
 ## Known limitations
 
-- **Graph state lives in memory.** After a restart the topology is rediscovered lazily, but payloads stored for `read` and handler bindings are not persisted — and both are dropped when the server stops, so another world opened in the same session starts clean. Bind handlers again once the world is loaded (e.g. from `on_server_started`).
+- **What survives a restart.** Payloads stored for `read` and handler bindings are saved with the world (`<world>/yog-data/yog-pipes/global.kv`, a `yog_api::Storage`) on server stop and every 5 minutes, and restored when it loads; the topology is not saved but rediscovered lazily. Bindings are saved as `(mod_id, symbol)` names — the function is resolved through interop on each delivery, so no code is persisted, and re-binding a position (e.g. from `on_server_started`) replaces the saved binding. A payload whose pipe vanished while the server was down is kept until the graph sees the position isn't a pipe; Yog Pipes can't drop it as items since it never knows what the bytes mean. The yog-api has no world-save hook or world path, so the world directory is located as the save next to `game_dir` with the newest `session.lock`, and a crash loses changes since the last autosave.
 - **Endpoints are pipe positions.** Only blocks registered via `register_pipe` are graph nodes; a machine or chest next to a pipe is reached by binding a handler at the pipe position beside it.
 - **Non-player block changes** (pistons, `/setblock`, other mods' `set_block`) aren't observed directly — call `refresh(pos)` after making them. Unknown positions are still discovered lazily, but a removed pipe stays in the graph until something re-checks it.
 

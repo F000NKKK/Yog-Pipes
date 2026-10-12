@@ -26,10 +26,29 @@ pub fn unbind(pos: &NodeKey) {
     lock(&HANDLERS).remove(pos);
 }
 
-/// Drop every binding — called when the server stops, since positions
-/// from one world mean nothing in the next one loaded.
+/// Drop every binding — called when the server stops (after
+/// `crate::persist` saved them), since positions from one world mean
+/// nothing in the next one loaded.
 pub fn clear() {
     lock(&HANDLERS).clear();
+}
+
+/// Every binding, for `crate::persist` to save. Only the names are saved —
+/// the function is resolved again on each dispatch.
+pub fn snapshot() -> Vec<(NodeKey, (String, String))> {
+    lock(&HANDLERS)
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
+}
+
+/// Put saved bindings back after a restart. A mod that already bound the
+/// same position this session (e.g. from its own `on_server_started`) wins.
+pub fn restore(saved: impl IntoIterator<Item = (NodeKey, (String, String))>) {
+    let mut handlers = lock(&HANDLERS);
+    for (pos, binding) in saved {
+        handlers.entry(pos).or_insert(binding);
+    }
 }
 
 /// If a handler is bound at `pos`, resolve it via the interop table and

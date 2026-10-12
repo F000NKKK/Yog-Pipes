@@ -264,8 +264,8 @@ pub fn rebuild_around(pos: &NodeKey, probe: &dyn Fn(&NodeKey) -> Option<Vec<Stri
 }
 
 /// Forget everything — topology and payloads. Called when the server
-/// stops, so switching singleplayer worlds never routes over the previous
-/// world's network.
+/// stops (after `crate::persist` saved the payloads), so switching
+/// singleplayer worlds never routes over the previous world's network.
 pub fn clear() {
     *lock(&GRAPH) = PipeGraph::default();
     lock(&PAYLOADS).clear();
@@ -310,6 +310,24 @@ pub fn deliver_broadcast(source: NodeKey, payload: PipePayload) -> Vec<NodeKey> 
 /// after `find_path` confirms a route exists).
 pub fn store_payload(pos: &NodeKey, payload: PipePayload) {
     lock(&PAYLOADS).insert(pos.clone(), payload);
+}
+
+/// Every stored payload, for `crate::persist` to save. Includes positions
+/// the graph hasn't rediscovered yet since the last restart.
+pub fn payloads_snapshot() -> Vec<(NodeKey, PipePayload)> {
+    lock(&PAYLOADS)
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
+}
+
+/// Put saved payloads back after a restart. A payload already delivered
+/// to the same position this session is newer and wins.
+pub fn restore_payloads(saved: impl IntoIterator<Item = (NodeKey, PipePayload)>) {
+    let mut payloads = lock(&PAYLOADS);
+    for (pos, payload) in saved {
+        payloads.entry(pos).or_insert(payload);
+    }
 }
 
 /// The payload last delivered to `pos`, if any.
@@ -483,6 +501,22 @@ mod tests {
         let mut g = PipeGraph::default();
         g.discover(key(0, 0, 0), &w.probe());
         assert_eq!(g.neighbors(&key(0, 0, 0)).count(), 0);
+    }
+
+    #[test]
+    fn restore_keeps_newer_payloads() {
+        // A dimension of its own, so other tests touching `PAYLOADS` can't
+        // interfere.
+        let at = |x| ("test:restore".to_string(), x, 0, 0);
+        let p = |b| PipePayload {
+            data: vec![b],
+            metadata: vec![],
+        };
+        store_payload(&at(0), p(2));
+        restore_payloads([(at(0), p(1)), (at(1), p(1))]);
+        assert_eq!(payload_at(&at(0)), Some(p(2)));
+        assert_eq!(payload_at(&at(1)), Some(p(1)));
+        assert!(payloads_snapshot().contains(&(at(1), p(1))));
     }
 
     #[test]

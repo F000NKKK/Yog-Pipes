@@ -85,7 +85,8 @@ pub fn send(
 }
 
 /// Read the payload last delivered to `pos` (by `broadcast` or `send`), if
-/// any — for mods that prefer polling over binding a handler.
+/// any — for mods that prefer polling over binding a handler. Stored
+/// payloads are saved with the world and survive a restart.
 #[yog_export]
 pub fn read(pos: PipePos) -> Result<Option<PipePayload>, String> {
     Ok(graph::payload_at(&pos.into()))
@@ -106,9 +107,11 @@ pub fn refresh(pos: PipePos) -> Result<(), String> {
 
 /// Bind a handler at `pos`: whenever a payload is delivered there, the
 /// function `mod_id` exported under `symbol` (an ordinary `#[yog_export]`
-/// function taking one `PipePayload`) is called with it. Bindings live in
-/// memory only and are dropped when the server stops — bind again once the
-/// world is loaded (e.g. from `on_server_started`).
+/// function taking one `PipePayload`) is called with it. Bindings are saved
+/// with the world by name and come back after a restart; the function is
+/// looked up again on each delivery, so it's whatever `mod_id` exports
+/// under `symbol` at that time. Binding the same position again (e.g. from
+/// `on_server_started`) simply replaces the saved binding.
 #[yog_export]
 pub fn bind_handler(pos: PipePos, mod_id: String, symbol: String) -> Result<(), String> {
     handler::bind(pos.into(), mod_id, symbol);
