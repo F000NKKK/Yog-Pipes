@@ -7,7 +7,7 @@ Universal transport framework for [Yog mods](https://github.com/F000NKKK/Yog-Mod
 Yog Pipes is **not** a fixed set of pipe blocks and it does **not** know or care what a pipe carries — items, fluid, energy, a redstone-like signal, or anything a mod invents. It only gives you:
 
 - **Pipe blocks** — register one via `PipeDef`, with your own shape/texture/recipes.
-- **Connectivity** — pipes auto-link to neighbors through a real, world-checked virtual graph. **Branching is the normal case** — a pipe node can have anywhere from 0 to 6 connected neighbors (T-junctions, crosses, …), not just a single in/out.
+- **Connectivity** — pipes auto-link to neighbors that share a link group, through a real, world-checked virtual graph. **Branching is the normal case** — a pipe node can have anywhere from 0 to 6 connected neighbors (T-junctions, crosses, …), not just a single in/out.
 - **Routing** — broadcast a payload to every node reachable on the network (signal-like fan-out), or send it point-to-point along the shortest path (item/energy-like transfer).
 - **Dispatch** — bind a handler (an ordinary function in your own mod) to a position, and Yog Pipes calls it whenever a payload arrives there.
 
@@ -15,7 +15,7 @@ What the payload actually *means* — item stack, energy amount, redstone level 
 
 ## How it works
 
-1. **Virtual graph** (`src/graph.rs`) — when a pipe is placed or broken, the graph is rebuilt via BFS, *checking the real world* at every step (`yog_api::World::get_block`) — a neighbor becomes an edge only if it's itself a block that went through `register_pipe`. Never guessed from an id's spelling, never assumed connected without checking. Edges are a proper adjacency map, so every traversal handles any branching factor per node, including loops (a ring of branches reconnecting).
+1. **Virtual graph** (`src/graph.rs`) — kept in step with the world incrementally, per dimension, *checking the real world* (`Server::get_block`) rather than assuming. A neighbor becomes an edge only if it's itself a block that went through `register_pipe` **and** the two share at least one `link_groups` tag — the same rule that grows the blocks' visual arms. Placing a pipe explores only positions the graph doesn't know yet; breaking one drops just that node; an explosion re-checks the known nodes in its reach. Networks built before a restart (or by `/setblock`) are discovered lazily the first time `broadcast`/`send` touches them, and `refresh(pos)` re-reads one explicitly. Edges are a proper adjacency map, so every traversal handles any branching factor per node, including loops (a ring of branches reconnecting).
 2. **Broadcast** — `broadcast(pos, payload)` reaches every node connected to `pos`, storing the payload and firing any bound handler at each one. Good for signal-like transport where every listener should see the same value.
 3. **Point-to-point** — `send(from, to, payload)` finds the shortest path (if any) and delivers only to `to`. Good for item/energy/fluid transfer between two specific endpoints.
 4. **Handlers** — `bind_handler(pos, mod_id, symbol)` points at an ordinary `#[yog_export] fn(PipePayload)` in *any* mod; no new callback ABI, it's resolved and called through the same interop mechanism every other cross-mod export uses.
@@ -54,6 +54,9 @@ All types are re-exported from `yog_pipes`:
 | `send(registry, from: PipePos, to: PipePos, PipePayload) -> bool` | Point-to-point delivery via shortest path; `false` if no path exists |
 | `read(PipePos) -> Option<PipePayload>` | Poll the last payload delivered to a position |
 | `bind_handler(PipePos, mod_id, symbol)` / `unbind_handler(PipePos)` | Attach/remove a handler function at a position |
+| `refresh(PipePos)` | Re-read the network around a position from the world — after changing pipes without a player (`set_block`, structures, `/setblock`) |
+
+`PipePos::dim` is a dimension id such as `"minecraft:overworld"` (a bare `"overworld"` is namespaced automatically).
 
 ## Philosophy
 
@@ -185,7 +188,9 @@ bind_handler(pos(4, 64, 0), "my-mod".into(), "on_pipe_payload".into()).unwrap();
 
 ## Known limitations
 
-- **Dimension is hardcoded to `"overworld"`** in the graph rebuild trigger. `PlaceBlockEvent`/`BlockBreakEvent` in `yog-event` carry no dimension field at all, so there's currently no way to learn it from those callbacks — fixing that is an upstream Yog Mod Loader change (new event field, ABI bump, Java/Mixin plumbing), not something this framework can work around on its own.
+- **Graph state lives in memory.** After a restart the topology is rediscovered lazily, but payloads stored for `read` and handler bindings are not persisted — and both are dropped when the server stops, so another world opened in the same session starts clean. Bind handlers again once the world is loaded (e.g. from `on_server_started`).
+- **Endpoints are pipe positions.** Only blocks registered via `register_pipe` are graph nodes; a machine or chest next to a pipe is reached by binding a handler at the pipe position beside it.
+- **Non-player block changes** (pistons, `/setblock`, other mods' `set_block`) aren't observed directly — call `refresh(pos)` after making them. Unknown positions are still discovered lazily, but a removed pipe stays in the graph until something re-checks it.
 
 ## License
 

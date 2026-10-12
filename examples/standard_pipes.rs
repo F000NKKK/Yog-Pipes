@@ -7,7 +7,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! yog-pipes = "0.1"
+//! yog-pipes = "0.3"
 //! ```
 //!
 //! ```ignore
@@ -19,23 +19,22 @@
 //!     properties: [("speed", 2.0), ("tick_interval", 15.0)].into(),
 //!     model: None,
 //!     link_groups: vec!["pipe_item".into(), "inventory".into()],
+//!     recipe: vec![],
 //! }).unwrap();
 //! ```
 //!
 //! ## Interop
 //!
 //! ```toml
+//! # yog.toml
 //! [dependencies]
-//! yog-pipes = "0.1"
+//! yog-pipes = "0.3"
 //! ```
 //!
 //! ```ignore
-//! use yog_exports::yog_pipes::{PipeKind, PipeDef, RegisterPipeArgs};
+//! use yog_exports::yog_pipes::{PipeKind, PipeDef};
 //!
-//! yog_exports::yog_pipes::register_pipe(RegisterPipeArgs {
-//!     api_ptr: registry.raw_api() as usize,
-//!     def: PipeDef { ... },
-//! }).unwrap();
+//! yog_exports::yog_pipes::register_pipe(PipeDef { ... }).unwrap();
 //! ```
 //!
 //! ---
@@ -43,7 +42,7 @@
 //! Below are examples showing what different mods might register.
 //! Each mod defines its own parameters — the framework does not dictate them.
 
-use yog_pipes::{PipeKind, PipeDef, register_pipe};
+use yog_pipes::{PipeKind, PipeDef, RecipeDef, register_pipe};
 
 use yog_api::{Mod, Registry};
 
@@ -61,6 +60,7 @@ impl Mod for ExamplePipes {
             ].into(),
             model: None,
             link_groups: vec!["pipe_item".into(), "inventory".into()],
+            recipe: vec![],
         }).unwrap();
 
         // ── Example 2: High-speed item pipe ──────────────────────────────────
@@ -74,6 +74,7 @@ impl Mod for ExamplePipes {
             ].into(),
             model: None,
             link_groups: vec!["pipe_item".into(), "inventory".into()],
+            recipe: vec![],
         }).unwrap();
 
         // ── Example 3: Fluid pipe with temperature limit ─────────────────────
@@ -87,6 +88,7 @@ impl Mod for ExamplePipes {
             ].into(),
             model: None,
             link_groups: vec!["pipe_fluid".into(), "tank".into()],
+            recipe: vec![],
         }).unwrap();
 
         // ── Example 4: Lava-proof pipe with high pressure ───────────────────
@@ -101,6 +103,7 @@ impl Mod for ExamplePipes {
             ].into(),
             model: None,
             link_groups: vec!["pipe_fluid".into(), "tank".into()],
+            recipe: vec![],
         }).unwrap();
 
         // ── Example 5: Signal pipe with range ────────────────────────────────
@@ -112,6 +115,7 @@ impl Mod for ExamplePipes {
             ].into(),
             model: None,
             link_groups: vec!["pipe_signal".into(), "redstone".into()],
+            recipe: vec![],
         }).unwrap();
 
         // ── Example 6: Energy pipe for Yog Flux only ─────────────────────────
@@ -125,6 +129,7 @@ impl Mod for ExamplePipes {
             ].into(),
             model: None,
             link_groups: vec!["pipe_energy".into(), "energy_producer".into(), "energy_consumer".into()],
+            recipe: vec![],
         }).unwrap();
 
         // ── Example 7: Custom pipe kind ("mana" from a magic mod) ────────────
@@ -138,10 +143,25 @@ impl Mod for ExamplePipes {
             ].into(),
             model: None,
             link_groups: vec!["pipe_mana".into(), "mana_source".into(), "mana_consumer".into()],
+            recipe: vec![],
         }).unwrap();
 
-        // ── Example 8: No recipe — mod adds its own ─────────────────────────
-        // The framework never generates recipes. If a mod wants one:
+        // ── Example 8: Recipes as data ───────────────────────────────────────
+        register_pipe(registry, PipeDef {
+            block_id: "example:item_pipe_iron".into(),
+            kind: PipeKind::Item,
+            properties: [("speed", 4.0)].into(),
+            model: None,
+            link_groups: vec!["pipe_item".into(), "inventory".into()],
+            recipe: vec![RecipeDef::Shaped {
+                rows: vec!["III".into()],
+                keys: vec![('I', "minecraft:iron_ingot".into())],
+                result_count: 8,
+            }],
+        }).unwrap();
+
+        // ── Example 9: No recipe — mod adds its own ──────────────────────────
+        // An empty `recipe` registers none. A mod can still add one itself:
         // registry.add_shaped_recipe(
         //     yog_api::ShapedRecipe::new("example:pipe_iron", "example:item_pipe_stone", 1)
         //         .row("III")
