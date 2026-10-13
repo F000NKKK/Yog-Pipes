@@ -1,0 +1,54 @@
+{
+  "name": "@Strings.copper_pipe",
+  "tooltip": "@Strings.copper_pipe.desc",
+  "block": {
+    "hardness": 1.5,
+    "resistance": 3,
+    "sound": "metal",
+    "tool": "pickaxe",
+    // The pipe's link group: Yog Pipes links two pipes when they share one,
+    // the same rule that grows the arms below.
+    "connect_groups": ["pipe_item"]
+  },
+  // The 6×6×6 core; the collision shape follows it ("shape": "auto").
+  "model": {
+    "textures": { "pipe": "minecraft:block/copper_block" },
+    "elements": [
+      {
+        "name": "core",
+        "from": [5, 5, 5],
+        "to": [11, 11, 11],
+        "faces": {
+          "down": { "texture": "#pipe" },
+          "up": { "texture": "#pipe" },
+          "north": { "texture": "#pipe" },
+          "south": { "texture": "#pipe" },
+          "west": { "texture": "#pipe" },
+          "east": { "texture": "#pipe" }
+        }
+      }
+    ]
+  },
+  // The arm towards north; the loader rotates it to each connected side.
+  "states": {
+    "connect": {
+      "arm": {
+        "textures": { "pipe": "minecraft:block/copper_block" },
+        "elements": [
+          {
+            "name": "arm",
+            "from": [5, 5, 0],
+            "to": [11, 11, 5],
+            "faces": {
+              "down": { "texture": "#pipe" },
+              "up": { "texture": "#pipe" },
+              "north": { "texture": "#pipe", "cullface": "north" },
+              "west": { "texture": "#pipe" },
+              "east": { "texture": "#pipe" }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

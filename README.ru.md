@@ -7,7 +7,7 @@
 ### Транспортный фреймворк для модов Yog: трубы, сети, маршрутизация и доставка
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.2-informational.svg)](yog.toml)
+[![Version](https://img.shields.io/badge/version-0.4.0-informational.svg)](yog.toml)
 [![Exports crate](https://img.shields.io/crates/v/yog_pipes_exports.svg?label=yog_pipes_exports)](https://crates.io/crates/yog_pipes_exports)
 [![Exports license](https://img.shields.io/badge/exports-MIT%20OR%20Apache--2.0-green.svg)](#-лицензия)
 [![Loaders](https://img.shields.io/badge/loaders-Fabric%20%7C%20NeoForge%20%7C%20Forge-8A2BE2.svg)](https://github.com/F000NKKK/Yog-Mod-Loader)
@@ -23,11 +23,11 @@
 ## 📖 Обзор
 
 **Yog Pipes** — это не набор готовых труб, и ему всё равно, что по трубе
-идёт: предметы, жидкость, энергия, сигнал вроде редстоуна или что-то, что
-придумал ваш мод. Он берёт на себя сложную часть работы для других модов на
+идёт: предметы, жидкость, сигнал вроде редстоуна или что-то, что придумал
+ваш мод. Он берёт на себя сложную часть работы для других модов на
 [Yog](https://github.com/F000NKKK/Yog-Mod-Loader):
 
-- 🧱 **Блоки труб**: регистрируйте свои через `PipeDef` (форма, рецепты, группы соединений)
+- 🧱 **Блоки труб**: ваши собственные блоки из файлов `.yblock`, отмеченные как трубы через `register_pipe`
 - 🕸️ **Соединения**: трубы соединяются с соседями из той же группы, а граф
   сверяется с реальным миром. Ветвление — обычное дело: у узла от 0 до 6
   соседей, циклы тоже поддерживаются
@@ -37,7 +37,7 @@
   вызовет её, когда туда что-то придёт
 - 💾 **Сохранение**: доставленные данные и привязки обработчиков сохраняются вместе с миром
 
-Что именно *означают* данные (стак предметов, порция энергии, уровень
+Что именно *означают* данные (стак предметов, объём жидкости, уровень
 сигнала), решают моды, которые их отправляют и принимают.
 
 ## 🚀 Быстрый старт
@@ -52,33 +52,44 @@ yog add --mod yog-pipes
 
 ```toml
 [dependencies.exports]
-yog-pipes = "0.3"
+yog-pipes = "0.4"
 ```
 
-`yog build` подключит крейт `yog_pipes_exports`: функции вызываются как из
-обычной Rust-библиотеки, а сам код во время игры выполняется внутри мода
-Yog Pipes:
+Труба — обычный контент: объявите блок в `.yblock` (модель, отвод,
+`connect_groups`, название и подсказка из вашего `.yres`):
+
+```jsonc
+// content/blocks/copper_pipe.yblock
+{
+  "name": "@Strings.copper_pipe",
+  "tooltip": "@Strings.copper_pipe.desc",
+  "block": { "hardness": 1.5, "sound": "metal", "connect_groups": ["pipe_item"] },
+  "model": { "textures": { "pipe": "minecraft:block/copper_block" }, "elements": [ /* сердцевина */ ] },
+  "states": { "connect": { "arm": { /* отвод на север */ } } }
+}
+```
+
+и отметьте его как трубу. `yog build` подключит крейт `yog_pipes_exports`:
+функции вызываются как из обычной Rust-библиотеки, а сам код во время игры
+выполняется внутри мода Yog Pipes:
 
 ```rust
-use yog_pipes::{PipeDef, PipeKind, RecipeDef, register_pipe};
+use crate::content::Blocks;
+use yog_pipes::{register_pipe, PipeDef, PipeKind};
 
+let pipe = Blocks::copper_pipe();
 register_pipe(PipeDef {
-    block_id: "mymod:pipe_iron".into(),
+    block_id: pipe.id,
     kind: PipeKind::Item,
-    properties: [("speed".into(), 2.0), ("capacity".into(), 64.0)].into(),
-    model: None,                       // стандартная труба 8x8x8
-    link_groups: vec!["pipe_item".into(), "inventory".into()],
-    recipe: vec![RecipeDef::Shaped {
-        rows: vec!["III".into()],
-        keys: vec![('I', "minecraft:iron_ingot".into())],
-        result_count: 4,
-    }],
+    link_groups: pipe.connect_groups, // те же группы, по которым растут отводы
+    properties: [("speed".into(), 2.0)].into(),
 }).unwrap();
 ```
 
-Игрокам нужны оба файла `.yog` в `yog-mods/`: ваш и Yog Pipes.
-В [`examples/standard_pipes.rs`](examples/standard_pipes.rs) регистрируется
-полный набор труб: для предметов, жидкостей, сигналов, энергии и своего типа.
+Рецепты — забота вашего мода (`registry.add_shaped_recipe(...)`). Игрокам
+нужны оба файла `.yog` в `yog-mods/`: ваш и Yog Pipes.
+[`examples/copper-pipes/`](examples/copper-pipes) — полный мод с одной
+трубой.
 
 ### Отправка данных
 
@@ -121,7 +132,7 @@ flowchart LR
 
 1. **Граф** обновляется постепенно, отдельно для каждого измерения, и
    сверяется с реальным миром. Сосед становится ребром, только если он
-   зарегистрирован через `register_pipe` **и** у них есть общая метка из
+   отмечен через `register_pipe` **и** у них есть общая метка из
    `link_groups`; по тому же правилу рисуются соединительные отводы блоков.
    Установка трубы исследует только неизвестные позиции, поломка убирает
    один узел, а взрыв перепроверяет узлы в радиусе. Сети, построенные до
@@ -130,7 +141,7 @@ flowchart LR
 2. **Broadcast** доходит до каждого связанного узла, сохраняет там данные и
    вызывает привязанный обработчик. Подходит для сигналов.
 3. **Send** ищет кратчайший путь и доставляет только адресату. Подходит для
-   перемещения предметов, жидкости или энергии между двумя точками.
+   перемещения предметов или жидкости между двумя точками.
 4. **Обработчики** — обычные функции `#[yog_export]` в любом моде, которые
    находятся по `(mod_id, symbol)` через тот же interop, что и все экспорты
    Yog. Отдельного ABI для колбэков нет.
@@ -142,11 +153,10 @@ flowchart LR
 
 | Элемент | Что это |
 |---|---|
-| `PipeDef { block_id, kind, properties, model, link_groups, recipe }` | Один блок трубы. `properties` — открытый `HashMap<String, f64>`: скорость, ёмкость, давление, что угодно |
+| `PipeDef { block_id, kind, link_groups, properties }` | Отмечает один из ваших блоков как трубу. `link_groups` — обычно `connect_groups` блока. `properties` — открытый `HashMap<String, f64>`: скорость, ёмкость, что угодно; Yog Pipes его не читает |
 | `PipeKind` | `Item`, `Fluid`, `Signal`, `Energy`, `Custom(String)`. Только описание, на маршрутизацию не влияет |
-| `RecipeDef` | `Shaped { rows, keys, result_count }`, `Shapeless { ingredients, result_count }`, `Furnace { input, result_count, experience, cook_time }` |
-| `ModelDef` / `ModelElement` / `FaceDef` / `ElementRotation` | Модель блока в виде данных (см. [ограничения](#-известные-ограничения)) |
-| `register_pipe(def)` | Регистрирует блок, его предмет и рецепты |
+| `register_pipe(def)` | Отмечает `def.block_id` как трубу (сам блок ваш, регистрируется из `.yblock`) |
+| `pipe_def(block_id) -> Option<PipeDef>` | С каким описанием блок зарегистрирован — для модов, читающих чужие трубы |
 | `PipePos { dim, x, y, z }` | Позиция в мире; `dim` вроде `"minecraft:overworld"` (к голому `"overworld"` пространство имён добавится само) |
 | `PipePayload { data: Vec<u8>, metadata: Vec<(String, String)> }` | Непрозрачные байты и метки; Yog Pipes их не читает |
 | `broadcast(pos, payload)` | Доставить во все связанные узлы |
@@ -155,21 +165,19 @@ flowchart LR
 | `bind_handler(pos, mod_id, symbol)` / `unbind_handler(pos)` | Привязать или снять обработчик |
 | `refresh(pos)` | Перечитать сеть вокруг `pos` после изменений, которых граф не видит |
 
-Все функции возвращают `Result<_, String>`. Внутри Yog Pipes у них есть
-первый параметр `&mut Registry`; крейт экспортов его скрывает, вызывающему
-передавать его не нужно.
+Все функции возвращают `Result<_, String>`. Внутри Yog Pipes у `broadcast`
+и `send` есть первый параметр `&mut Registry` (для вызова обработчиков);
+крейт экспортов его скрывает, вызывающему передавать его не нужно.
 
-Исходники: `src/pipe.rs` (регистрация), `graph.rs` (сеть), `transport.rs`
-(broadcast/send/read/привязки), `handler.rs` (вызов через interop),
-`persist.rs` (сохранение), `model.rs`, `recipe.rs`, `payload.rs`, `kind.rs`.
+Исходники: `src/pipe.rs` (какие блоки — трубы), `graph.rs` (сеть),
+`transport.rs` (broadcast/send/read/привязки), `handler.rs` (вызов через
+interop), `persist.rs` (сохранение), `payload.rs`, `kind.rs`; название и
+описание мода — в `resources/Strings*.yres`.
 
 ## ⚠️ Известные ограничения
 
-- **Модели.** Сейчас используется только габарит элементов (он становится
-  формой коллизии). Текстуры, грани и поворот из `ModelDef` принимаются, но
-  пока не отрисовываются.
 - **Конечные точки — это трубы.** Узлами графа бывают только блоки,
-  зарегистрированные через `register_pipe`. До сундука или машины рядом с
+  отмеченные через `register_pipe`. До сундука или машины рядом с
   трубой достучаться можно, привязав обработчик к соседней трубе.
 - **Изменения не от игрока** (поршни, `/setblock`, `set_block` другого мода)
   граф не замечает: вызовите `refresh(pos)`. Убранная труба остаётся в

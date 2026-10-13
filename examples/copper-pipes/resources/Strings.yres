@@ -1,0 +1,18 @@
+{
+  "mod_name": {
+    "value": "Copper Pipes",
+    "comment": "The mod's name (yog.toml name)"
+  },
+  "mod_description": {
+    "value": "Example mod for Yog Pipes: a copper item pipe.",
+    "comment": "yog.toml description"
+  },
+  "copper_pipe": {
+    "value": "Copper Pipe",
+    "comment": "Block name"
+  },
+  "copper_pipe.desc": {
+    "value": "Item pipe · speed 2",
+    "comment": "Block tooltip"
+  }
+}

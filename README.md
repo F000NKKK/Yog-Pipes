@@ -7,7 +7,7 @@
 ### A transport framework for Yog mods: pipes, networks, routing and delivery
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.2-informational.svg)](yog.toml)
+[![Version](https://img.shields.io/badge/version-0.4.0-informational.svg)](yog.toml)
 [![Exports crate](https://img.shields.io/crates/v/yog_pipes_exports.svg?label=yog_pipes_exports)](https://crates.io/crates/yog_pipes_exports)
 [![Exports license](https://img.shields.io/badge/exports-MIT%20OR%20Apache--2.0-green.svg)](#-license)
 [![Loaders](https://img.shields.io/badge/loaders-Fabric%20%7C%20NeoForge%20%7C%20Forge-8A2BE2.svg)](https://github.com/F000NKKK/Yog-Mod-Loader)
@@ -23,11 +23,11 @@
 ## 📖 Overview
 
 **Yog Pipes** is not a set of ready-made pipes, and it doesn't care what a
-pipe carries: items, fluid, energy, a redstone-like signal or something your
-mod invents. It gives other [Yog](https://github.com/F000NKKK/Yog-Mod-Loader)
+pipe carries: items, fluid, a redstone-like signal or something your mod
+invents. It gives other [Yog](https://github.com/F000NKKK/Yog-Mod-Loader)
 mods the hard parts:
 
-- 🧱 **Pipe blocks**: register your own with a `PipeDef` (shape, recipes, link groups)
+- 🧱 **Pipe blocks**: your own blocks from `.yblock` content files, marked as pipes with `register_pipe`
 - 🕸️ **Connectivity**: pipes link to neighbours that share a link group, in a
   graph checked against the real world. Branching is the normal case: a node
   can have 0 to 6 neighbours, loops included
@@ -37,7 +37,7 @@ mods the hard parts:
   calls it when a payload arrives there
 - 💾 **Persistence**: delivered payloads and handler bindings are saved with the world
 
-What a payload *means* (an item stack, an amount of energy, a signal level)
+What a payload *means* (an item stack, a fluid amount, a signal level)
 is up to the mods that send and receive it.
 
 ## 🚀 Quick Start
@@ -52,33 +52,44 @@ This writes it into your `yog.toml`:
 
 ```toml
 [dependencies.exports]
-yog-pipes = "0.3"
+yog-pipes = "0.4"
 ```
 
-`yog build` maps it to the `yog_pipes_exports` crate, so you call the
-functions like a normal Rust library while the code itself runs inside the
-Yog Pipes mod at runtime:
+A pipe is ordinary content: declare the block in a `.yblock` (model,
+connection arm, `connect_groups`, name and tooltip from your `.yres`):
+
+```jsonc
+// content/blocks/copper_pipe.yblock
+{
+  "name": "@Strings.copper_pipe",
+  "tooltip": "@Strings.copper_pipe.desc",
+  "block": { "hardness": 1.5, "sound": "metal", "connect_groups": ["pipe_item"] },
+  "model": { "textures": { "pipe": "minecraft:block/copper_block" }, "elements": [ /* the core */ ] },
+  "states": { "connect": { "arm": { /* the arm towards north */ } } }
+}
+```
+
+then mark it as a pipe. `yog build` maps the dependency to the
+`yog_pipes_exports` crate, so you call the functions like a normal Rust
+library while the code itself runs inside the Yog Pipes mod at runtime:
 
 ```rust
-use yog_pipes::{PipeDef, PipeKind, RecipeDef, register_pipe};
+use crate::content::Blocks;
+use yog_pipes::{register_pipe, PipeDef, PipeKind};
 
+let pipe = Blocks::copper_pipe();
 register_pipe(PipeDef {
-    block_id: "mymod:pipe_iron".into(),
+    block_id: pipe.id,
     kind: PipeKind::Item,
-    properties: [("speed".into(), 2.0), ("capacity".into(), 64.0)].into(),
-    model: None,                       // default 8x8x8 pipe core
-    link_groups: vec!["pipe_item".into(), "inventory".into()],
-    recipe: vec![RecipeDef::Shaped {
-        rows: vec!["III".into()],
-        keys: vec![('I', "minecraft:iron_ingot".into())],
-        result_count: 4,
-    }],
+    link_groups: pipe.connect_groups, // the same groups the arms connect by
+    properties: [("speed".into(), 2.0)].into(),
 }).unwrap();
 ```
 
-Players need both `.yog` files in `yog-mods/`: yours and Yog Pipes.
-[`examples/standard_pipes.rs`](examples/standard_pipes.rs) registers a full set
-of item, fluid, signal, energy and custom pipes.
+Recipes are your mod's own (`registry.add_shaped_recipe(...)`). Players need
+both `.yog` files in `yog-mods/`: yours and Yog Pipes.
+[`examples/copper-pipes/`](examples/copper-pipes) is a complete mod with one
+pipe.
 
 ### Sending payloads
 
@@ -120,7 +131,7 @@ flowchart LR
 ```
 
 1. **Graph.** Kept up to date incrementally, per dimension, by checking the
-   real world. A neighbour becomes an edge only if it was registered with
+   real world. A neighbour becomes an edge only if it was marked with
    `register_pipe` **and** shares at least one `link_groups` tag; the same
    rule draws the blocks' connection arms. Placing a pipe explores only
    unknown positions, breaking one removes just that node, and an explosion
@@ -130,7 +141,7 @@ flowchart LR
 2. **Broadcast** reaches every node connected to the source, stores the
    payload there and calls any bound handler. Good for signals.
 3. **Send** finds the shortest path and delivers only to the destination.
-   Good for moving items, fluid or energy between two endpoints.
+   Good for moving items or fluid between two endpoints.
 4. **Handlers** are ordinary `#[yog_export]` functions in any mod, found by
    `(mod_id, symbol)` through the same interop every Yog export uses. No
    extra callback ABI.
@@ -142,11 +153,10 @@ Yog Pipes runs no tick loop of its own: payloads move when you call
 
 | Item | What it is |
 |---|---|
-| `PipeDef { block_id, kind, properties, model, link_groups, recipe }` | One pipe block. `properties` is an open `HashMap<String, f64>`: speed, capacity, pressure, anything |
+| `PipeDef { block_id, kind, link_groups, properties }` | Marks one of your blocks as a pipe. `link_groups`: normally the block's `connect_groups`. `properties` is an open `HashMap<String, f64>`: speed, capacity, anything; Yog Pipes never reads it |
 | `PipeKind` | `Item`, `Fluid`, `Signal`, `Energy`, `Custom(String)`. Descriptive only, never used for routing |
-| `RecipeDef` | `Shaped { rows, keys, result_count }`, `Shapeless { ingredients, result_count }`, `Furnace { input, result_count, experience, cook_time }` |
-| `ModelDef` / `ModelElement` / `FaceDef` / `ElementRotation` | Block model as data (see [limitations](#-known-limitations)) |
-| `register_pipe(def)` | Registers the block, its item and recipes |
+| `register_pipe(def)` | Marks `def.block_id` as a pipe (the block itself is yours, registered from `.yblock`) |
+| `pipe_def(block_id) -> Option<PipeDef>` | What a block was registered with, for mods that read other mods' pipes |
 | `PipePos { dim, x, y, z }` | A world position; `dim` like `"minecraft:overworld"` (a bare `"overworld"` gets the namespace) |
 | `PipePayload { data: Vec<u8>, metadata: Vec<(String, String)> }` | Opaque bytes plus tags; Yog Pipes never reads them |
 | `broadcast(pos, payload)` | Deliver to every connected node |
@@ -155,19 +165,18 @@ Yog Pipes runs no tick loop of its own: payloads move when you call
 | `bind_handler(pos, mod_id, symbol)` / `unbind_handler(pos)` | Attach or remove a handler |
 | `refresh(pos)` | Re-read the network around `pos` after changes the graph can't see |
 
-All functions return `Result<_, String>`. Inside Yog Pipes they take a
-leading `&mut Registry`; the exports crate hides it, so callers don't pass it.
+All functions return `Result<_, String>`. Inside Yog Pipes `broadcast` and
+`send` take a leading `&mut Registry` (to dispatch handlers); the exports
+crate hides it, so callers don't pass it.
 
-Source layout: `src/pipe.rs` (registration), `graph.rs` (the network),
-`transport.rs` (broadcast/send/read/bindings), `handler.rs` (dispatch through
-interop), `persist.rs` (saving), `model.rs`, `recipe.rs`, `payload.rs`, `kind.rs`.
+Source layout: `src/pipe.rs` (which blocks are pipes), `graph.rs` (the
+network), `transport.rs` (broadcast/send/read/bindings), `handler.rs`
+(dispatch through interop), `persist.rs` (saving), `payload.rs`, `kind.rs`;
+the mod's name and description are in `resources/Strings*.yres`.
 
 ## ⚠️ Known Limitations
 
-- **Models.** Only the elements' bounding box is used today (it becomes the
-  collision shape). Textures, faces and rotation in `ModelDef` are accepted
-  but not rendered yet.
-- **Endpoints are pipe positions.** Only blocks registered with
+- **Endpoints are pipe positions.** Only blocks marked with
   `register_pipe` are nodes. A chest or machine next to a pipe is reached by
   binding a handler on the pipe beside it.
 - **Changes made without a player** (pistons, `/setblock`, another mod's
