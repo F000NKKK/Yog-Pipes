@@ -1,129 +1,135 @@
-//! Yog Pipes — universal transport framework for Yog mods.
+//! Yog Pipes — a transport framework for Yog mods.
 //!
-//! A framework, not a content mod: it adds no blocks, items or recipes of
-//! its own. It keeps a virtual graph of pipe networks in step with the
-//! world, routes payloads through it and dispatches them to handlers —
-//! without dictating what a pipe looks like or what it carries.
+//! A framework, not a content mod: it adds no blocks, items or recipes.
+//! Mods declare their own pipe blocks as content and tell Yog-Pipes what
+//! those pipes carry and how; Yog-Pipes keeps the networks in step with
+//! the world, moves resources, signals and messages through them, keeps
+//! every unit accounted for and saves it all with the world.
 //!
-//! - **Pipes are ordinary content.** A mod declares its pipe blocks in
-//!   `content/**/*.yblock` (model, `states.connect` arms,
-//!   `block.connect_groups`, name/tooltip from `.yres`) and marks them with
-//!   [`register_pipe`]. Blocks are recognized as pipes only that way, never
-//!   by guessing from an id's spelling.
-//! - **Link groups** — two adjacent pipes link when their groups share an
-//!   entry, the same rule the loader uses to grow the visual arms.
-//! - **Payload-agnostic transport** — what a [`PipePayload`] means is up to
-//!   the mods producing and consuming it; Yog-Pipes only connects, routes
-//!   and dispatches.
-//! - **Branching is normal** — a node can have 0–6 connected neighbors,
-//!   loops included.
+//! - **One abstract pipe.** There are no item/fluid/energy pipe types. A
+//!   *capability* (`register_capability`) is one thing pipes carry — named
+//!   by its mod, with its resource kinds and a *mechanic* (buffered,
+//!   routed, in-flight, flow, signal or one implemented by another mod).
+//!   A pipe block carries any number of capabilities (`attach`), each
+//!   with its own networks.
+//! - **Endpoints** (`register_endpoint`) are the blocks pipes exchange
+//!   with; their mod handles each insert/extract/signal/message in an
+//!   ordinary `#[yog_export]` function.
+//! - **Conservation.** Units move only between a network and an endpoint
+//!   that accepted them; anything that has to leave otherwise (a broken
+//!   pipe, an overflow) is reported to the capability's owner as an event.
 //!
-//! ## Usage (from another mod, `[dependencies.exports] yog-pipes = "0.4"`)
-//!
-//! ```ignore
-//! use crate::content::Blocks;
-//! use yog_pipes::{register_pipe, PipeDef, PipeKind};
-//!
-//! let block = Blocks::copper_pipe(); // content/blocks/copper_pipe.yblock
-//! register_pipe(PipeDef {
-//!     block_id: block.id,
-//!     kind: PipeKind::Item,
-//!     link_groups: block.connect_groups,
-//!     properties: [("speed".into(), 2.0)].into(),
-//! }).unwrap();
-//! ```
-//!
-//! Transport: [`broadcast`] (every connected node), [`send`] (shortest
-//! path to one node), [`read`] (poll), [`bind_handler`] (call a
-//! `#[yog_export] fn(PipePayload)` of the bound mod on each delivery).
-//! See `examples/copper-pipes/` for a complete consumer mod.
+//! The engine itself lives in the `yog-pipes-core` crate (`core/`, no game
+//! dependency); this crate is the host. See `docs/design/transport.md` and
+//! `examples/` for consumer mods.
 
-mod graph;
-mod handler;
-mod kind;
-mod payload;
+mod api;
+mod bridge;
+mod external;
+mod host;
+mod ops;
 mod persist;
-mod pipe;
-mod transport;
+mod types;
 
-use yog_api::{info, Mod, Registry};
+use yog_api::{EventPhase, Mod, Registry, Server, info};
+use yog_pipes_core::ids::Pos;
 
-pub use kind::PipeKind;
-pub use payload::PipePayload;
-pub use pipe::{pipe_def, register_pipe, PipeDef};
-pub use transport::{bind_handler, broadcast, read, refresh, send, unbind_handler, PipePos};
+pub use api::*;
+pub use types::*;
 
-// ── Mod entry point ──────────────────────────────────────────────────────────
+/// Explosion reach: a vanilla blast ray starts at up to 1.3 × power and
+/// loses 0.225 per 0.3-block step, so it travels at most ~1.75 × power
+/// blocks; 2 × power + 2 leaves margin for rounding.
+fn blast_radius(power: f32) -> i32 {
+    (power.max(0.0) * 2.0).ceil() as i32 + 2
+}
+
+fn world_pos(host: &mut host::Host, dim: &str, x: i32, y: i32, z: i32) -> Pos {
+    let pos = PipePos {
+        dim: dim.to_string(),
+        x,
+        y,
+        z,
+    };
+    bridge::pos(&mut host.engine.reg, &pos)
+}
 
 pub struct YogPipesMod;
 
 impl Mod for YogPipesMod {
     fn register(registry: &mut Registry) {
-        // Keep the graph in step with the world. `pipe::is_pipe_block` is the
-        // only thing that decides whether a block id is a pipe — never a
-        // naming convention. Changes made any other way (`/setblock`, a
-        // mod's own `set_block`) are picked up lazily or via `refresh`.
+        // Keep the networks in step with the world. A block matters only
+        // if some mod registered it (as a pipe or an endpoint) — never by
+        // a naming convention. Changes made any other way are picked up
+        // through `refresh`.
         registry.on_player_place_block(|e, phase, srv| {
-            if phase == yog_api::EventPhase::Post && pipe::is_pipe_block(&e.block_id) {
-                let node = (
-                    graph::normalize_dim(&e.dimension),
-                    e.pos.x,
-                    e.pos.y,
-                    e.pos.z,
-                );
-                graph::on_placed(node, &graph::world_probe(srv));
+            if phase == EventPhase::Post {
+                let _ = host::with(|host| {
+                    let known = host.engine.reg.block_id(&e.block_id).is_some();
+                    let p = world_pos(host, &e.dimension, e.pos.x, e.pos.y, e.pos.z);
+                    if known || host.engine.reg.positional.contains_key(&p) {
+                        host.run(Some(srv), |e, io, probe| e.place(io, probe, p));
+                    }
+                });
             }
             true
         });
 
         registry.on_block_break(|e, phase, _srv| {
-            if phase == yog_api::EventPhase::Post && pipe::is_pipe_block(&e.block_id) {
-                graph::on_removed(&(
-                    graph::normalize_dim(&e.dimension),
-                    e.pos.x,
-                    e.pos.y,
-                    e.pos.z,
-                ));
+            if phase == EventPhase::Post {
+                let _ = host::with(|host| {
+                    let p = world_pos(host, &e.dimension, e.pos.x, e.pos.y, e.pos.z);
+                    host.run(None, |e, io, _| e.remove(io, p));
+                });
             }
             true
         });
 
-        // An explosion can take out any number of pipes at once without a
-        // per-block event: re-check the known nodes in its reach. A vanilla
-        // blast ray starts at up to 1.3 × power and loses 0.225 per 0.3-block
-        // step, so it travels at most ~1.75 × power blocks; 2 × power + 2
-        // leaves margin for rounding.
+        // An explosion removes blocks without per-block events: re-check
+        // what's known in its reach.
         registry.on_explosion(|e, phase, srv| {
-            if phase == yog_api::EventPhase::Post {
-                let radius = (e.power.max(0.0) * 2.0).ceil() as i32 + 2;
-                let center = (e.x.floor() as i32, e.y.floor() as i32, e.z.floor() as i32);
-                graph::revalidate_area(
-                    &graph::normalize_dim(&e.dimension),
-                    center,
-                    radius,
-                    &graph::world_probe(srv),
-                );
+            if phase == EventPhase::Post {
+                let _ = host::with(|host| {
+                    let (x, y, z) = (e.x.floor() as i32, e.y.floor() as i32, e.z.floor() as i32);
+                    let center = world_pos(host, &e.dimension, x, y, z);
+                    let r = blast_radius(e.power);
+                    host.run(Some(srv), |e, io, probe| {
+                        e.revalidate_area(io, probe, center, r)
+                    });
+                });
             }
             true
         });
 
-        // Stored payloads and handler bindings are saved with the world
-        // (see `persist`); the topology is rediscovered from the world.
-        registry.on_server_started(persist::load);
-
-        // Positions mean nothing once the world is gone — save, then don't
-        // carry one world's networks into the next one opened in the same
-        // session.
-        registry.on_server_stopping(|_srv| {
-            persist::unload();
-            graph::clear();
-            handler::clear();
+        registry.on_server_started(|srv| {
+            bridge::invalidate();
+            let _ = host::with(|host| persist::load(host, srv));
         });
 
-        // Transport is event-driven (call `broadcast`/`send` when a value
-        // actually changes), not tick-polled — the tick hook below only
-        // autosaves; how/when payloads move is each producing mod's call.
-        registry.on_tick(|_srv| persist::tick());
+        // Positions mean nothing once the world is gone: save, then don't
+        // carry one world's networks into the next one opened.
+        registry.on_server_stopping(|_srv| {
+            let _ = host::with(|host| {
+                persist::unload(host);
+                for def in std::mem::take(&mut host.positional) {
+                    if let EndpointTarget::Position(p) = &def.target {
+                        let p = bridge::pos(&mut host.engine.reg, p);
+                        host.run(None, |e, io, _| e.unregister_endpoint(io, &def.capability, p));
+                    }
+                }
+                host.engine.clear_world();
+            });
+        });
+
+        registry.on_tick(|srv: &dyn Server| {
+            let _ = host::with(|host| {
+                host.run(Some(srv), |e, io, probe| {
+                    e.rediscover(io, probe);
+                    e.tick(io);
+                });
+                persist::tick(host);
+            });
+        });
 
         info!("[yog-pipes] ready.");
     }

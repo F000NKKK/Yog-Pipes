@@ -450,7 +450,11 @@ pub enum ExternalCall {
         capability: String,
         network: u64,
         size: u32,
-        params: Vec<f64>,
+        /// Per attach param (in `Mechanic::External::params` order): the
+        /// smallest value on the network (a bottleneck) and the sum (a
+        /// capacity).
+        param_min: Vec<f64>,
+        param_sum: Vec<f64>,
         ports: Vec<ExternalPort>,
         results: Vec<ExternalResult>,
         state: Vec<u8>,

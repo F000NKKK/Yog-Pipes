@@ -205,7 +205,10 @@ fn discovery(c: &mut Criterion) {
             let mut w = world(&cells);
             let (mut e, cap, res) = signal_engine();
             build(&mut e, &mut w, res, cells[0]);
-            assert_eq!(e.net_info(cap, pos(cells[0])).map(|i| i.size), Some(n as u32));
+            assert_eq!(
+                e.net_info(cap, pos(cells[0])).map(|i| i.size),
+                Some(cells.len() as u32)
+            );
             g.bench_with_input(BenchmarkId::new(name, n), &n, |b, _| {
                 b.iter_batched(
                     signal_engine,
