@@ -77,8 +77,8 @@ register_pipe(PipeDef {
 ```
 
 Players need both `.yog` files in `yog-mods/`: yours and Yog Pipes.
-[`examples/standard_pipes.rs`](examples/standard_pipes.rs) shows a full set
-of item, fluid and signal pipes.
+[`examples/standard_pipes.rs`](examples/standard_pipes.rs) registers a full set
+of item, fluid, signal, energy and custom pipes.
 
 ### Sending payloads
 
