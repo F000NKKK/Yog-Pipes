@@ -254,7 +254,7 @@ Each closed piece becomes a new network; models get `split(from, parts)` and div
 
 World access is the `Probe` trait: `fn block(&self, pos) -> Option<BlockTypeId>` (one host call =
 one `get_block` + a hash lookup of the id). Discovery is BFS over unknown positions only, bounded
-by `MAX_DISCOVERY` (65 536) per call. Networks saved with the world are re-discovered eagerly on
+by `MAX_DISCOVERY` (262 144 nodes, not probed positions) per call. Networks saved with the world are re-discovered eagerly on
 the first ticks after start from their saved representative positions (not lazily on first use
 as in 0.4 — a network must exist to tick).
 

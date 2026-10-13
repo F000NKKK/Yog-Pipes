@@ -24,10 +24,11 @@ use crate::registry::{
     Kind, Policy, Registry, Side, SideMode, groups_meet,
 };
 
-/// Most positions one discovery probes (a runaway guard, not a limit on
-/// network size: a bigger network is completed by the next discovery that
-/// touches it).
-pub const MAX_DISCOVERY: usize = 65_536;
+/// Most nodes one discovery adds (a runaway guard, not a limit on network
+/// size: a bigger network is completed by the next discovery that touches
+/// it). Counted in nodes, not probed positions — every node also probes
+/// the air around it.
+pub const MAX_DISCOVERY: usize = 262_144;
 
 /// Bounded per-endpoint inbox for `post`.
 pub const INBOX: usize = 64;
@@ -656,6 +657,7 @@ impl Engine {
         let mut queue: VecDeque<Pos> = VecDeque::from([start]);
         let mut endpoints: Vec<Pos> = Vec::new();
         probed.insert(start, probe.block(&self.reg, start));
+        let mut found = 0usize;
 
         while let Some(pos) = queue.pop_front() {
             let bt = probed[&pos];
@@ -680,6 +682,9 @@ impl Engine {
                         }
                     }
                     region[c].push(id);
+                    if !grew {
+                        found += 1;
+                    }
                     grew = true;
                 }
             }
@@ -692,7 +697,7 @@ impl Engine {
                     if probed.contains_key(&np) {
                         continue;
                     }
-                    if probed.len() >= MAX_DISCOVERY {
+                    if found >= MAX_DISCOVERY {
                         break;
                     }
                     let nb = probe.block(&self.reg, np);
