@@ -1,198 +1,204 @@
-# Yog Pipes
+<div align="center">
 
-Universal transport framework for [Yog mods](https://github.com/F000NKKK/Yog-Mod-Loader).
+<a id="top"></a>
 
-## What it is
+# 🔌 Yog Pipes
 
-Yog Pipes is **not** a fixed set of pipe blocks and it does **not** know or care what a pipe carries — items, fluid, energy, a redstone-like signal, or anything a mod invents. It only gives you:
+### A transport framework for Yog mods: pipes, networks, routing and delivery
 
-- **Pipe blocks** — register one via `PipeDef`, with your own shape/texture/recipes.
-- **Connectivity** — pipes auto-link to neighbors that share a link group, through a real, world-checked virtual graph. **Branching is the normal case** — a pipe node can have anywhere from 0 to 6 connected neighbors (T-junctions, crosses, …), not just a single in/out.
-- **Routing** — broadcast a payload to every node reachable on the network (signal-like fan-out), or send it point-to-point along the shortest path (item/energy-like transfer).
-- **Dispatch** — bind a handler (an ordinary function in your own mod) to a position, and Yog Pipes calls it whenever a payload arrives there.
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.3.2-informational.svg)](yog.toml)
+[![Exports crate](https://img.shields.io/crates/v/yog_pipes_exports.svg?label=yog_pipes_exports)](https://crates.io/crates/yog_pipes_exports)
+[![Exports license](https://img.shields.io/badge/exports-MIT%20OR%20Apache--2.0-green.svg)](#-license)
+[![Loaders](https://img.shields.io/badge/loaders-Fabric%20%7C%20NeoForge%20%7C%20Forge-8A2BE2.svg)](https://github.com/F000NKKK/Yog-Mod-Loader)
 
-What the payload actually *means* — item stack, energy amount, redstone level — is entirely up to the mods producing and consuming it.
+🇺🇸 **English** | 🇷🇺 [Русский](README.ru.md)
 
-## How it works
+[Overview](#-overview) • [Quick Start](#-quick-start) • [How It Works](#-how-it-works) • [API](#-api) • [Limitations](#-known-limitations) • [Building](#-building) • [License](#-license)
 
-1. **Virtual graph** (`src/graph.rs`) — kept in step with the world incrementally, per dimension, *checking the real world* (`Server::get_block`) rather than assuming. A neighbor becomes an edge only if it's itself a block that went through `register_pipe` **and** the two share at least one `link_groups` tag — the same rule that grows the blocks' visual arms. Placing a pipe explores only positions the graph doesn't know yet; breaking one drops just that node; an explosion re-checks the known nodes in its reach. Networks built before a restart (or by `/setblock`) are discovered lazily the first time `broadcast`/`send` touches them, and `refresh(pos)` re-reads one explicitly. Edges are a proper adjacency map, so every traversal handles any branching factor per node, including loops (a ring of branches reconnecting).
-2. **Broadcast** — `broadcast(pos, payload)` reaches every node connected to `pos`, storing the payload and firing any bound handler at each one. Good for signal-like transport where every listener should see the same value.
-3. **Point-to-point** — `send(from, to, payload)` finds the shortest path (if any) and delivers only to `to`. Good for item/energy/fluid transfer between two specific endpoints.
-4. **Handlers** — `bind_handler(pos, mod_id, symbol)` points at an ordinary `#[yog_export] fn(PipePayload)` in *any* mod; no new callback ABI, it's resolved and called through the same interop mechanism every other cross-mod export uses.
+</div>
 
-Yog Pipes deliberately does **not** run a tick loop deciding when payloads move — call `broadcast`/`send` when a value actually changes (event-driven, like vanilla redstone), not every tick.
+---
 
-## Layout
+## 📖 Overview
 
+**Yog Pipes** is not a set of ready-made pipes, and it doesn't care what a
+pipe carries: items, fluid, energy, a redstone-like signal or something your
+mod invents. It gives other [Yog](https://github.com/F000NKKK/Yog-Mod-Loader)
+mods the hard parts:
+
+- 🧱 **Pipe blocks**: register your own with a `PipeDef` (shape, recipes, link groups)
+- 🕸️ **Connectivity**: pipes link to neighbours that share a link group, in a
+  graph checked against the real world. Branching is the normal case: a node
+  can have 0 to 6 neighbours, loops included
+- 📡 **Routing**: broadcast a payload to the whole network, or send it point
+  to point along the shortest path
+- 📬 **Delivery**: bind a function from your mod to a position, and Yog Pipes
+  calls it when a payload arrives there
+- 💾 **Persistence**: delivered payloads and handler bindings are saved with the world
+
+What a payload *means* (an item stack, an amount of energy, a signal level)
+is up to the mods that send and receive it.
+
+## 🚀 Quick Start
+
+Add Yog Pipes as a mod dependency:
+
+```bash
+yog add --mod yog-pipes
 ```
-src/
-├── lib.rs        # mod entry point, event wiring
-├── kind.rs       # PipeKind
-├── model.rs      # 3D model system (ModelDef, ModelElement, FaceDef, ElementRotation)
-├── recipe.rs      # RecipeDef (Shaped/Shapeless/Furnace) — recipes as data
-├── pipe.rs       # PipeDef + register_pipe (the core entry point)
-├── payload.rs    # PipePayload — the opaque data+metadata a pipe carries
-├── transport.rs  # broadcast / send / read / bind_handler / unbind_handler
-├── handler.rs    # resolves + calls a bound handler via the interop table
-├── persist.rs    # saves payloads + handler bindings with the world
-└── graph.rs      # the virtual pipe network (BFS, branching-safe)
+
+This writes it into your `yog.toml`:
+
+```toml
+[dependencies.exports]
+yog-pipes = "0.3"
 ```
 
-## API
-
-All types are re-exported from `yog_pipes`:
-
-| Type / fn | Description |
-|------|-------------|
-| `PipeKind` | What a pipe carries: `Item`, `Fluid`, `Signal`, `Energy`, `Custom(String)` — purely descriptive, doesn't affect behavior |
-| `PipeDef` | Open-ended pipe definition: `properties` map, `model`, `link_groups`, `recipe` |
-| `RecipeDef` | One recipe as data: `Shaped { rows, keys, result_count }`, `Shapeless { ingredients, result_count }`, or `Furnace { input, result_count, experience, cook_time }` |
-| `ModelDef` / `ModelElement` / `FaceDef` / `ElementRotation` | 3D block model: cubic elements, per-face textures, rotation |
-| `register_pipe(registry, PipeDef)` | Register one pipe block + item + (optional) recipes |
-| `PipePayload { data: Vec<u8>, metadata: Vec<(String, String)> }` | Arbitrary payload — Yog Pipes never reads `data` or `metadata`, mods define their own vocabulary |
-| `PipePos { dim, x, y, z }` | A world position, for the transport calls below |
-| `broadcast(registry, PipePos, PipePayload)` | Deliver to every reachable node + dispatch bound handlers |
-| `send(registry, from: PipePos, to: PipePos, PipePayload) -> bool` | Point-to-point delivery via shortest path; `false` if no path exists |
-| `read(PipePos) -> Option<PipePayload>` | Poll the last payload delivered to a position |
-| `bind_handler(PipePos, mod_id, symbol)` / `unbind_handler(PipePos)` | Attach/remove a handler function at a position |
-| `refresh(PipePos)` | Re-read the network around a position from the world — after changing pipes without a player (`set_block`, structures, `/setblock`) |
-
-`PipePos::dim` is a dimension id such as `"minecraft:overworld"` (a bare `"overworld"` is namespaced automatically).
-
-## Philosophy
-
-- **No fixed tiers** — `PipeDef` has an open `properties: HashMap<String, f64>` map. Mods define exactly the parameters they need (speed, capacity, pressure, temperature, etc.).
-- **Recipes as data** — `PipeDef::recipe: Vec<RecipeDef>` carries any number of recipes of any kind (shaped, shapeless, furnace), any pattern/ingredients/output count — not hardcoded to crafting-table-only, single-recipe pipes.
-- **3D models** — `ModelDef` lets mods describe block models programmatically with per-face textures, elements, and rotation. No JSON model files required.
-- **Link groups** — control which block types pipes connect to via string group names.
-- **Extensible kinds** — `PipeKind::Custom("mymod:mana")` for any custom transport type; `PipeKind` itself is descriptive only, never inspected by the routing/dispatch logic.
-- **Payload-agnostic transport** — Yog Pipes moves bytes + metadata; whether that's an item stack, energy, fluid, or a signal level is the producing/consuming mod's business, not this framework's.
-- **No hardcoded conventions** — a block is a "pipe" because it went through `register_pipe`, never because its id contains some magic substring.
-
-## Usage
-
-### Direct dependency
+`yog build` maps it to the `yog_pipes_exports` crate, so you call the
+functions like a normal Rust library while the code itself runs inside the
+Yog Pipes mod at runtime:
 
 ```rust
-use yog_pipes::{PipeKind, PipeDef, register_pipe};
+use yog_pipes::{PipeDef, PipeKind, RecipeDef, register_pipe};
 
-register_pipe(registry, PipeDef {
+register_pipe(PipeDef {
     block_id: "mymod:pipe_iron".into(),
     kind: PipeKind::Item,
-    properties: [("speed", 2.0), ("tick_interval", 15.0)].into(),
-    model: None,
+    properties: [("speed".into(), 2.0), ("capacity".into(), 64.0)].into(),
+    model: None,                       // default 8x8x8 pipe core
     link_groups: vec!["pipe_item".into(), "inventory".into()],
-    recipe: vec![],
+    recipe: vec![RecipeDef::Shaped {
+        rows: vec!["III".into()],
+        keys: vec![('I', "minecraft:iron_ingot".into())],
+        result_count: 4,
+    }],
 }).unwrap();
 ```
 
-### Interop (no compile-time linking)
+Players need both `.yog` files in `yog-mods/`: yours and Yog Pipes.
+[`examples/standard_pipes.rs`](examples/standard_pipes.rs) shows a full set
+of item, fluid and signal pipes.
 
-Add `yog-pipes` to `[dependencies]` in `yog.toml` — `yog build`/`yog add` map it to the exports crate. Every function is exported via `#[yog_export]`, so it's called exactly like the direct-dependency version above:
-
-```rust
-use yog_exports::yog_pipes::{PipeKind, PipeDef};
-
-yog_exports::yog_pipes::register_pipe(PipeDef {
-    block_id: "mymod:pipe_iron".into(),
-    kind: PipeKind::Item,
-    properties: [("speed", 2.0), ("tick_interval", 15.0)].into(),
-    model: None,
-    link_groups: vec!["pipe_item".into(), "inventory".into()],
-    recipe: vec![],
-}).unwrap();
-```
-
-The exports crate (`yog-pipes-exports` on crates.io) is published under **MIT OR Apache-2.0**, regardless of this mod's own AGPL license — `yog-cli` defaults every generated exports crate to that permissive license so depending on it never forces a consumer's mod under AGPL too (see `[mod] exports_license` in `yog.toml` if a mod wants the opposite).
-
-### Recipes as data (any kind, any station)
+### Sending payloads
 
 ```rust
-use yog_pipes::RecipeDef;
-
-register_pipe(registry, PipeDef {
-    block_id: "mymod:pipe_iron".into(),
-    kind: PipeKind::Item,
-    properties: [("speed", 2.0)].into(),
-    model: None,
-    link_groups: vec!["pipe_item".into()],
-    recipe: vec![
-        RecipeDef::Shaped {
-            rows: vec!["III".into()],
-            keys: vec![('I', "minecraft:iron_ingot".into())],
-            result_count: 4,
-        },
-        RecipeDef::Furnace {
-            input: "mymod:raw_pipe".into(),
-            result_count: 1,
-            experience: 0.2,
-            cook_time: 100,
-        },
-    ],
-}).unwrap();
-```
-
-### Custom 3D model
-
-```rust
-use yog_pipes::{
-    PipeKind, PipeDef, ModelDef, ModelElement, FaceDef,
-    ElementRotation, register_pipe,
-};
-
-register_pipe(registry, PipeDef {
-    block_id: "mymod:glass_pipe".into(),
-    kind: PipeKind::Fluid,
-    properties: [("fluid_capacity", 8000.0)].into(),
-    model: Some(ModelDef {
-        texture: Some("mymod:block/glass_pipe".into()),
-        elements: vec![ModelElement {
-            from: [5.0, 0.0, 5.0],
-            to: [11.0, 16.0, 11.0],
-            faces: [].into(),
-            rotation: None,
-        }],
-    }),
-    link_groups: vec!["pipe_fluid".into(), "tank".into()],
-    recipe: vec![],
-}).unwrap();
-```
-
-### Transport: broadcast (signal-like) and point-to-point (item/energy-like)
-
-```rust
-use yog_exports::yog_pipes::{PipePos, PipePayload, broadcast, send, read, bind_handler};
+use yog_pipes::{PipePayload, PipePos, bind_handler, broadcast, read, send};
 
 let pos = |x, y, z| PipePos { dim: "minecraft:overworld".into(), x, y, z };
 
-// Every node reachable from (0, 64, 0) sees this — redstone-like fan-out.
-// Call again whenever the source value changes, not every tick.
-broadcast(pos(0, 64, 0), PipePayload {
-    data: vec![15],
-    metadata: vec![("kind".into(), "redstone".into())],
+// Every node connected to (0, 64, 0) gets this: redstone-style fan-out.
+// Call it when the value changes, not every tick.
+broadcast(pos(0, 64, 0), PipePayload { data: vec![15], metadata: vec![] }).unwrap();
+
+// One specific destination along the shortest path; false if not connected.
+let delivered = send(pos(0, 64, 0), pos(4, 64, 0), PipePayload {
+    data: item_bytes,
+    metadata: vec![("kind".into(), "item".into())],
 }).unwrap();
 
-// Point-to-point — e.g. moving one item stack from a specific source to a
-// specific destination. Returns `false` if no path currently connects them.
-let delivered = send(
-    pos(0, 64, 0), pos(4, 64, 0),
-    PipePayload { data: item_bytes, metadata: vec![] },
-).unwrap();
+// Poll the last payload at a position...
+let last = read(pos(4, 64, 0)).unwrap();
 
-// Either poll...
-let payload = read(pos(4, 64, 0)).unwrap();
-
-// ...or bind a handler once — an ordinary `#[yog_export] fn(PipePayload)`
-// in your own mod, called automatically whenever a payload arrives.
+// ...or have `#[yog_export] fn on_pipe_payload(p: PipePayload)` from your
+// mod called on every delivery.
 bind_handler(pos(4, 64, 0), "my-mod".into(), "on_pipe_payload".into()).unwrap();
 ```
 
-## Known limitations
+## ⚙️ How It Works
 
-- **What survives a restart.** Payloads stored for `read` and handler bindings are saved with the world (`<world>/yog-data/yog-pipes/global.kv`, a `yog_api::Storage`) on server stop and every 5 minutes, and restored when it loads; the topology is not saved but rediscovered lazily. Bindings are saved as `(mod_id, symbol)` names — the function is resolved through interop on each delivery, so no code is persisted, and re-binding a position (e.g. from `on_server_started`) replaces the saved binding. A payload whose pipe vanished while the server was down is kept until the graph sees the position isn't a pipe; Yog Pipes can't drop it as items since it never knows what the bytes mean. The yog-api has no world-save hook or world path, so the world directory is located as the save next to `game_dir` with the newest `session.lock`, and a crash loses changes since the last autosave.
-- **Endpoints are pipe positions.** Only blocks registered via `register_pipe` are graph nodes; a machine or chest next to a pipe is reached by binding a handler at the pipe position beside it.
-- **Non-player block changes** (pistons, `/setblock`, other mods' `set_block`) aren't observed directly — call `refresh(pos)` after making them. Unknown positions are still discovered lazily, but a removed pipe stays in the graph until something re-checks it.
+```mermaid
+flowchart LR
+    src["Your mod<br/>broadcast / send"] --> g
+    subgraph g["Pipe graph (per dimension)"]
+        a((A)) --- b((B)) --- c((C))
+        b --- d((D))
+        c --- e((E)) --- d
+    end
+    g --> st["Stored payload<br/>read(pos)"]
+    g --> h["Bound handler<br/>#[yog_export] fn(PipePayload)"]
+```
 
-## License
+1. **Graph.** Kept up to date incrementally, per dimension, by checking the
+   real world. A neighbour becomes an edge only if it was registered with
+   `register_pipe` **and** shares at least one `link_groups` tag; the same
+   rule draws the blocks' connection arms. Placing a pipe explores only
+   unknown positions, breaking one removes just that node, and an explosion
+   re-checks the nodes in its reach. Networks built before a restart, or by
+   `/setblock`, are discovered the first time `broadcast`/`send` touches
+   them; `refresh(pos)` re-reads one explicitly.
+2. **Broadcast** reaches every node connected to the source, stores the
+   payload there and calls any bound handler. Good for signals.
+3. **Send** finds the shortest path and delivers only to the destination.
+   Good for moving items, fluid or energy between two endpoints.
+4. **Handlers** are ordinary `#[yog_export]` functions in any mod, found by
+   `(mod_id, symbol)` through the same interop every Yog export uses. No
+   extra callback ABI.
 
-AGPL-v3.0 (the mod itself). The generated exports crate is MIT OR Apache-2.0 — see [Interop](#interop-no-compile-time-linking) above.
+Yog Pipes runs no tick loop of its own: payloads move when you call
+`broadcast`/`send`, event-driven like vanilla redstone.
+
+## 📚 API
+
+| Item | What it is |
+|---|---|
+| `PipeDef { block_id, kind, properties, model, link_groups, recipe }` | One pipe block. `properties` is an open `HashMap<String, f64>`: speed, capacity, pressure, anything |
+| `PipeKind` | `Item`, `Fluid`, `Signal`, `Energy`, `Custom(String)`. Descriptive only, never used for routing |
+| `RecipeDef` | `Shaped { rows, keys, result_count }`, `Shapeless { ingredients, result_count }`, `Furnace { input, result_count, experience, cook_time }` |
+| `ModelDef` / `ModelElement` / `FaceDef` / `ElementRotation` | Block model as data (see [limitations](#-known-limitations)) |
+| `register_pipe(def)` | Registers the block, its item and recipes |
+| `PipePos { dim, x, y, z }` | A world position; `dim` like `"minecraft:overworld"` (a bare `"overworld"` gets the namespace) |
+| `PipePayload { data: Vec<u8>, metadata: Vec<(String, String)> }` | Opaque bytes plus tags; Yog Pipes never reads them |
+| `broadcast(pos, payload)` | Deliver to every connected node |
+| `send(from, to, payload) -> bool` | Deliver along the shortest path |
+| `read(pos) -> Option<PipePayload>` | The last payload delivered to `pos` |
+| `bind_handler(pos, mod_id, symbol)` / `unbind_handler(pos)` | Attach or remove a handler |
+| `refresh(pos)` | Re-read the network around `pos` after changes the graph can't see |
+
+All functions return `Result<_, String>`. Inside Yog Pipes they take a
+leading `&mut Registry`; the exports crate hides it, so callers don't pass it.
+
+Source layout: `src/pipe.rs` (registration), `graph.rs` (the network),
+`transport.rs` (broadcast/send/read/bindings), `handler.rs` (dispatch through
+interop), `persist.rs` (saving), `model.rs`, `recipe.rs`, `payload.rs`, `kind.rs`.
+
+## ⚠️ Known Limitations
+
+- **Models.** Only the elements' bounding box is used today (it becomes the
+  collision shape). Textures, faces and rotation in `ModelDef` are accepted
+  but not rendered yet.
+- **Endpoints are pipe positions.** Only blocks registered with
+  `register_pipe` are nodes. A chest or machine next to a pipe is reached by
+  binding a handler on the pipe beside it.
+- **Changes made without a player** (pistons, `/setblock`, another mod's
+  `set_block`) aren't observed: call `refresh(pos)`. A removed pipe stays in
+  the graph until something re-checks it.
+- **Persistence.** Stored payloads and bindings go to
+  `<world>/yog-data/yog-pipes/global.kv` on server stop and every 5 minutes;
+  the graph itself is rediscovered. A crash loses changes since the last
+  autosave. The world folder is found as the save with the newest
+  `session.lock`, since yog-api has no world-path hook yet.
+
+## 🔨 Building
+
+```bash
+yog build                  # -> artifacts/yog-pipes.yog
+yog run fabric-1.21.1      # dev game; needs Yog-Mod-Loader cloned next to this repo
+yog publish exports        # publish yog_pipes_exports to crates.io
+```
+
+## 📄 License
+
+The mod is **AGPL-3.0-only** ([LICENSE](LICENSE)). The generated
+`yog_pipes_exports` crate is **MIT OR Apache-2.0**, so depending on Yog Pipes
+never puts your own mod under the AGPL.
+
+---
+
+<div align="center">
+
+**[⬆ Back to Top](#top)**
+
+Part of the [Yog](https://github.com/F000NKKK/Yog-Mod-Loader) project
+
+</div>
