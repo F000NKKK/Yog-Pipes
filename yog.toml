@@ -1,13 +1,17 @@
 [mod]
 id          = "yog-pipes"
 name        = "@Strings.mod_name"
-version     = "0.4.0"
+version     = "0.5.0"
 description = "@Strings.mod_description"
 authors     = ["Yog Team"]
 license     = "AGPL-3.0-only"
+edition     = "2024"
 
 [dependencies]
 yog-api = "0.92"
+# The game-independent engine (core/); the path is relative to the
+# generated .yog-build/.
+yog-pipes-core = { path = "../core" }
 
 [run.fabric-1.21.1]
 name       = "Fabric 1.21.1"
