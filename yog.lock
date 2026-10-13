@@ -471,15 +471,15 @@ dependencies = [
 
 [[package]]
 name = "yog-abi"
-version = "0.28.0"
+version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6974d43e4dc06ffd8e483a6e31ec785466c684ca92e54fee32d00340cf50726"
+checksum = "38cf9237f3cd633bfa9a47b32ce16050f2e645fee16beff555da3ad6b035ec3d"
 
 [[package]]
 name = "yog-api"
-version = "0.92.0"
+version = "0.92.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2507220c2912e265dd8cb62dfb89ed2fa9dcf2739f61b2b8d97891a37bcb77e"
+checksum = "6fc66ce324e2d35cee8ba88f3987410ca113ee0d2379c57c3f5758fb5ecaf67c"
 dependencies = [
  "ctor",
  "rkyv",
@@ -531,9 +531,9 @@ checksum = "d712d79a3e046f0482232c1dc59400e23f85f60935758b7bbcf2a02ed288e981"
 
 [[package]]
 name = "yog-core"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f582073bfd74e26c2af19f35d4e9bc5b3db6d810549d8e0b132aca05986d284e"
+checksum = "1b646311e42a25a64b36bdeb551cf3bfe2ffff0bab7e4173011ccbc343801d92"
 
 [[package]]
 name = "yog-dimensions"
@@ -609,7 +609,7 @@ checksum = "ebae18d123f9e2e9f129410f826c760be4f909f2a44f8df6a6966bb6570db85a"
 
 [[package]]
 name = "yog-pipes"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "rkyv",
  "yog-api",
@@ -617,9 +617,9 @@ dependencies = [
 
 [[package]]
 name = "yog-player"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae81efa6fc7ef5e20c40c7cc47536055079d0241f892b12e1800e95f190a319b"
+checksum = "9418496838ad3d6f0431d65952bcb9a65e15f94798bf40fe0687fea6fcc47053"
 dependencies = [
  "yog-core",
  "yog-entity",
@@ -643,9 +643,9 @@ checksum = "d300b68e1172c9cec95fee547a1cf641cc7063562b5851b91017814d39beb045"
 
 [[package]]
 name = "yog-ui"
-version = "0.40.0"
+version = "0.40.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4676e595532a24a68f09b7fdf2ca3f9d3cdc6c130e01e73f2ae2cceb009edd23"
+checksum = "800be7ef75dbb26c7db05f839c4a289ea2572aa363dfce1b4ffe5b0f6139b8d8"
 dependencies = [
  "yog-abi",
  "yog-gfx",
