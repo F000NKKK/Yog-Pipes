@@ -212,7 +212,6 @@ impl Layer {
         self.nodes
             .iter()
             .enumerate()
-            .filter(|(_, n)| n.net != NO_NET || n.links != [NO_NODE; 6])
             .map(|(i, n)| (NodeId(i as u32), n))
             .filter(|(id, n)| self.index.get(&n.pos) == Some(id))
     }
