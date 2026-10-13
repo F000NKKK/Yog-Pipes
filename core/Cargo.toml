@@ -1,0 +1,20 @@
+# The pure transport engine of Yog-Pipes: topology, networks, models,
+# policies, indication and persistence encoding. No yog-api dependency, so it
+# is unit-, property- and criterion-tested on its own; the mod (`../src`)
+# wraps it with the world probe, endpoint dispatch and saving.
+[package]
+name         = "yog-pipes-core"
+version      = "0.5.0"
+edition      = "2021"
+license      = "AGPL-3.0-only"
+description  = "Transport engine of the Yog-Pipes mod"
+publish      = false
+
+[dependencies]
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+
+[[bench]]
+name    = "transport"
+harness = false
