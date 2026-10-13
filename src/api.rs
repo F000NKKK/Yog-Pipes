@@ -49,10 +49,12 @@ pub fn unregister_endpoint(capability: String, pos: PipePos) -> Result<(), Strin
 
 /// Configure one face of the pipe at `pos` (saved with the world).
 #[yog_export]
-pub fn set_side(capability: String,
+pub fn set_side(
+    capability: String,
     pos: PipePos,
     face: PipeFace,
-    side: SideDef,) -> Result<(), String> {
+    side: SideDef,
+) -> Result<(), String> {
     crate::ops::set_side(capability, pos, face, side)
 }
 
@@ -96,10 +98,12 @@ pub fn level(capability: String, pos: PipePos, channel: u8) -> Result<u8, String
 /// (`receive`). `false` when not connected or the inbox is full. From
 /// inside a handler the post is queued and `true` means "queued".
 #[yog_export]
-pub fn post(capability: String,
+pub fn post(
+    capability: String,
     from: PipePos,
     to: PipePos,
-    payload: PipePayload,) -> Result<bool, String> {
+    payload: PipePayload,
+) -> Result<bool, String> {
     crate::ops::post(capability, from, to, payload)
 }
 

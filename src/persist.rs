@@ -89,7 +89,7 @@ pub fn load(host: &mut Host, srv: &dyn yog_api::Server) {
         match decode_endpoints(&bytes) {
             Ok(defs) => {
                 for def in defs {
-                    if let Err(e) = crate::api::register_endpoint_in(host, def.clone()) {
+                    if let Err(e) = crate::ops::register_endpoint_in(host, def.clone()) {
                         // Its capability isn't registered this session:
                         // keep it for the next save anyway.
                         yog_api::warn!("[yog-pipes] saved endpoint kept but inactive: {e}");

@@ -163,7 +163,10 @@ pub enum Mechanic {
     /// Implemented by another mod: `handler` is called with an
     /// [`ExternalCall`] per network tick; `params` are the attach params
     /// it reads.
-    External { handler: Handler, params: Vec<String> },
+    External {
+        handler: Handler,
+        params: Vec<String>,
+    },
 }
 
 /// Which sinks get resources first.
@@ -317,10 +320,7 @@ pub enum Want {
 pub enum EndpointOp {
     /// Take up to `amount`; reply [`EndpointReply::Accepted`]. With
     /// `simulate` nothing may change.
-    Insert {
-        stack: Stack,
-        simulate: bool,
-    },
+    Insert { stack: Stack, simulate: bool },
     /// Give up to `max`; reply [`EndpointReply::Gave`].
     Extract {
         want: Want,
@@ -412,12 +412,26 @@ pub struct ExternalPort {
 #[derive(Debug, Clone, PartialEq)]
 #[yog_export]
 pub enum ExternalOp {
-    Insert { port: u32, stack: Stack },
-    Extract { port: u32, want: Want, max: u64 },
+    Insert {
+        port: u32,
+        stack: Stack,
+    },
+    Extract {
+        port: u32,
+        want: Want,
+        max: u64,
+    },
     /// Units leave the network at `at` (reported as [`PipeEvent::Spilled`]).
-    Spill { at: PipePos, stack: Stack },
+    Spill {
+        at: PipePos,
+        stack: Stack,
+    },
     /// Indicator slot `slot` of the whole network: `num / den`.
-    Indicate { slot: u8, num: u64, den: u64 },
+    Indicate {
+        slot: u8,
+        num: u64,
+        den: u64,
+    },
 }
 
 /// The outcome of one [`ExternalOp`], in order.

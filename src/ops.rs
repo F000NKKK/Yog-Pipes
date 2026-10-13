@@ -16,9 +16,9 @@ use crate::bridge;
 use crate::external::ExternalDriver;
 use crate::host::{self, Host};
 use crate::types::{
-    AttachDef, CapabilityDef, Distribution, EndpointDef, EndpointTarget, FaceInfo,
-    IndicatorSource, KindDef, KindForm, Mechanic, MergeRule, NetworkInfo, PipeFace, PipeInfo,
-    PipePayload, PipePos, SideDef, SideMode,
+    AttachDef, CapabilityDef, Distribution, EndpointDef, EndpointTarget, FaceInfo, IndicatorSource,
+    KindDef, KindForm, Mechanic, MergeRule, NetworkInfo, PipeFace, PipeInfo, PipePayload, PipePos,
+    SideDef, SideMode,
 };
 
 fn cap_id(host: &Host, name: &str) -> Result<yog_pipes_core::ids::CapId, String> {
@@ -313,7 +313,11 @@ pub(crate) fn post(
     }
 }
 
-pub(crate) fn broadcast(capability: String, from: PipePos, payload: PipePayload) -> Result<u32, String> {
+pub(crate) fn broadcast(
+    capability: String,
+    from: PipePos,
+    payload: PipePayload,
+) -> Result<u32, String> {
     let run = move |host: &mut Host| -> Result<u32, String> {
         let cap = cap_id(host, &capability)?;
         let f = bridge::pos(&mut host.engine.reg, &from);
@@ -335,10 +339,7 @@ pub(crate) fn receive(capability: String, pos: PipePos) -> Result<Option<PipePay
     host::with(|host| {
         let cap = cap_id(host, &capability)?;
         let p = bridge::pos(&mut host.engine.reg, &pos);
-        Ok(host
-            .engine
-            .receive(cap, p)
-            .and_then(|b| bridge::unpack(&b)))
+        Ok(host.engine.receive(cap, p).and_then(|b| bridge::unpack(&b)))
     })?
 }
 
@@ -352,7 +353,10 @@ pub(crate) fn latest(capability: String, pos: PipePos) -> Result<Option<PipePayl
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
-pub(crate) fn network_info(capability: String, pos: PipePos) -> Result<Option<NetworkInfo>, String> {
+pub(crate) fn network_info(
+    capability: String,
+    pos: PipePos,
+) -> Result<Option<NetworkInfo>, String> {
     host::with(|host| {
         let cap = cap_id(host, &capability)?;
         let p = bridge::pos(&mut host.engine.reg, &pos);

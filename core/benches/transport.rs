@@ -286,9 +286,11 @@ fn messaging(c: &mut Criterion) {
         let mut io = Endless { res, moved: 0 };
         let (from, to) = (pos(cells[0]), pos(cells[cells.len() - 1]));
         assert_eq!(e.net_info(cap, from).map(|i| i.size), Some(n as u32));
-        g.bench_with_input(BenchmarkId::new("broadcast_grid_100_listeners", n), &n, |b, _| {
-            b.iter(|| black_box(e.broadcast(&mut io, cap, from, &[15])))
-        });
+        g.bench_with_input(
+            BenchmarkId::new("broadcast_grid_100_listeners", n),
+            &n,
+            |b, _| b.iter(|| black_box(e.broadcast(&mut io, cap, from, &[15]))),
+        );
         g.bench_with_input(BenchmarkId::new("post_corner_to_corner", n), &n, |b, _| {
             b.iter(|| {
                 black_box(e.post(&mut io, cap, from, to, &[1; 8]));

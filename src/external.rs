@@ -36,7 +36,10 @@ impl ExternalDriver {
     fn call(&mut self, input: &ExternalCall) -> Option<ExternalReply> {
         let reply = call!(self.target, input, ExternalReply);
         if reply.is_none() {
-            log_once(&self.capability, "external handler missing or its reply unreadable");
+            log_once(
+                &self.capability,
+                "external handler missing or its reply unreadable",
+            );
         }
         reply
     }
@@ -68,10 +71,9 @@ fn apply(cx: &mut Cx, net: NetId, ports: &[Port], ops: Vec<ExternalOp>) -> Vec<E
                 ExternalResult::Inserted(cx.insert(p, r, stack.amount, 0, false))
             }
             ExternalOp::Extract { port, want, max } => {
-                let (Some(&p), Ok(w)) = (
-                    ports.get(port as usize),
-                    bridge::core_want(cx.reg, &want),
-                ) else {
+                let (Some(&p), Ok(w)) =
+                    (ports.get(port as usize), bridge::core_want(cx.reg, &want))
+                else {
                     out.push(ExternalResult::Extracted(None));
                     continue;
                 };
@@ -152,7 +154,10 @@ impl Driver for ExternalDriver {
             if round + 1 == MAX_ROUNDS {
                 // Running these now would move units the model never
                 // hears about.
-                log_once(&self.capability, "external model asked for I/O in its last round; ignored");
+                log_once(
+                    &self.capability,
+                    "external model asked for I/O in its last round; ignored",
+                );
                 return activity;
             }
             let results = apply(cx, net, &ports, reply.ops);

@@ -184,7 +184,14 @@ impl HostIo<'_> {
 }
 
 impl Io for HostIo<'_> {
-    fn insert(&mut self, reg: &Registry, call: &Call, res: ResId, amount: u64, simulate: bool) -> u64 {
+    fn insert(
+        &mut self,
+        reg: &Registry,
+        call: &Call,
+        res: ResId,
+        amount: u64,
+        simulate: bool,
+    ) -> u64 {
         let op = EndpointOp::Insert {
             stack: bridge::stack(reg, res, amount),
             simulate,
