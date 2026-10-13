@@ -399,6 +399,28 @@ impl Layer {
         })
     }
 
+    pub fn param_max(&self, id: NetId, p: usize) -> f64 {
+        self.net(id).map_or(0.0, |n| {
+            n.types
+                .iter()
+                .map(|&(a, _)| self.atts[a as usize].params.get(p).copied().unwrap_or(0.0))
+                .fold(0.0, f64::max)
+        })
+    }
+
+    /// Smallest non-zero value of a parameter (0 = none set: no limit).
+    pub fn param_min_nonzero(&self, id: NetId, p: usize) -> f64 {
+        self.net(id).map_or(0.0, |n| {
+            let m = n
+                .types
+                .iter()
+                .map(|&(a, _)| self.atts[a as usize].params.get(p).copied().unwrap_or(0.0))
+                .filter(|&v| v > 0.0)
+                .fold(f64::INFINITY, f64::min);
+            if m.is_finite() { m } else { 0.0 }
+        })
+    }
+
     /// Bump the BFS epoch by `k` and return the first stamp of the new
     /// range. Marks are reset before the counter could wrap.
     fn stamps(&mut self, k: u32) -> u32 {

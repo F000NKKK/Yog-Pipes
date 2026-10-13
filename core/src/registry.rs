@@ -298,3 +298,142 @@ pub fn groups_meet(a: &[u32], b: &[u32]) -> bool {
     }
     false
 }
+
+// ── Capabilities ─────────────────────────────────────────────────────────────
+
+/// How a model orders the endpoints it hands resources to (§6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Policy {
+    /// Rotating start, so every sink gets its turn.
+    #[default]
+    RoundRobin,
+    /// Highest endpoint + side priority first; round-robin within a level.
+    Priority,
+    /// Fewest pipe hops from the source first.
+    Nearest,
+    /// Simulate every sink, then water-fill: everyone gets an equal share
+    /// of what they can take.
+    EvenSplit,
+    /// Seeded shuffle (deterministic per world tick).
+    Random,
+}
+
+/// What an indicator shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndicatorSource {
+    /// How full the buffer/segment is.
+    Fill,
+    /// Whether something moved recently (0/max).
+    Flow,
+    /// Units in a node.
+    Units,
+    /// Signal level at a node (max over channels).
+    Power,
+    /// Value `n` published by an external model.
+    External(u8),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Indicator {
+    /// Property suffix: the block-state property is `<prefix>_<name>`.
+    pub name: String,
+    /// The property's maximum (`0..=levels`).
+    pub levels: u8,
+    pub source: IndicatorSource,
+}
+
+/// A registered capability (its model lives in the engine, by the same id).
+#[derive(Debug, Clone)]
+pub struct Capability {
+    pub name: String,
+    pub kinds: Vec<KindId>,
+    pub exclusive: bool,
+    pub state_prefix: String,
+    pub indicators: Vec<Indicator>,
+    pub policy: Policy,
+    /// The host's handle for this capability's event hook (0 = none).
+    pub events: u32,
+}
+
+impl Capability {
+    /// Whether this capability carries resources of `kind`.
+    pub fn carries(&self, kinds: &Kinds, kind: KindId) -> bool {
+        self.kinds.iter().any(|&k| kinds.convertible(kind, k).is_some())
+    }
+}
+
+/// Every registration the engine knows, in one place so models can borrow
+/// it next to their layer.
+#[derive(Debug, Default)]
+pub struct Registry {
+    pub kinds: Kinds,
+    pub resources: Resources,
+    pub filters: Filters,
+    pub caps: Vec<Capability>,
+    pub blocks: Vec<BlockType>,
+    pub block_index: FxHashMap<String, BlockTypeId>,
+    pub endpoints: Vec<EndpointType>,
+    /// Positional endpoint types by position.
+    pub positional: FxHashMap<Pos, Vec<EpTypeId>>,
+    pub groups: Interner<String>,
+    pub dims: Interner<String>,
+}
+
+impl Registry {
+    pub fn cap(&self, id: CapId) -> &Capability {
+        &self.caps[id.index()]
+    }
+
+    pub fn cap_id(&self, name: &str) -> Option<CapId> {
+        self.caps
+            .iter()
+            .position(|c| c.name == name)
+            .map(|i| CapId(i as u16))
+    }
+
+    pub fn block_id(&self, name: &str) -> Option<BlockTypeId> {
+        self.block_index.get(name).copied()
+    }
+
+    /// Get or create the block type for a block id.
+    pub fn block_entry(&mut self, name: &str) -> BlockTypeId {
+        if let Some(&id) = self.block_index.get(name) {
+            return id;
+        }
+        let id = BlockTypeId(self.blocks.len() as u32);
+        self.blocks.push(BlockType {
+            name: name.to_string(),
+            ..Default::default()
+        });
+        self.block_index.insert(name.to_string(), id);
+        id
+    }
+
+    pub fn endpoint(&self, id: EpTypeId) -> &EndpointType {
+        &self.endpoints[id.index()]
+    }
+
+    /// Endpoint types of capability `cap` that apply at `pos` holding
+    /// block `block` (positional ones win over block ones).
+    pub fn endpoint_type(&self, cap: CapId, pos: Pos, block: Option<BlockTypeId>) -> Option<EpTypeId> {
+        if let Some(list) = self.positional.get(&pos)
+            && let Some(&t) = list.iter().find(|&&t| self.endpoint(t).cap == cap)
+        {
+            return Some(t);
+        }
+        let b = block?;
+        self.blocks[b.index()]
+            .endpoints
+            .iter()
+            .copied()
+            .find(|&t| self.endpoint(t).cap == cap)
+    }
+
+    pub fn dim(&mut self, name: &str) -> crate::ids::DimId {
+        crate::ids::DimId(self.dims.intern(crate::ids::normalize_dim(name)) as u16)
+    }
+
+    pub fn dim_name(&self, id: crate::ids::DimId) -> &str {
+        self.dims.resolve(id.0 as u32)
+    }
+}
