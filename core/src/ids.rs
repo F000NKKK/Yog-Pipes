@@ -26,11 +26,10 @@ impl FxHasher {
 impl Hasher for FxHasher {
     #[inline]
     fn write(&mut self, bytes: &[u8]) {
-        let mut chunks = bytes.chunks_exact(8);
-        for c in &mut chunks {
-            self.add(u64::from_le_bytes(c.try_into().unwrap()));
+        let (words, rest) = bytes.as_chunks::<8>();
+        for w in words {
+            self.add(u64::from_le_bytes(*w));
         }
-        let rest = chunks.remainder();
         if !rest.is_empty() {
             let mut buf = [0u8; 8];
             buf[..rest.len()].copy_from_slice(rest);
@@ -129,7 +128,7 @@ pub const NO_NODE: NodeId = NodeId(u32::MAX);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct NetId {
     pub index: u32,
-    pub gen: u32,
+    pub generation: u32,
 }
 
 // ── Positions and faces ──────────────────────────────────────────────────────

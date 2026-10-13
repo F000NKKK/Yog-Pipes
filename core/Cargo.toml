@@ -5,7 +5,7 @@
 [package]
 name         = "yog-pipes-core"
 version      = "0.5.0"
-edition      = "2021"
+edition      = "2024"
 license      = "AGPL-3.0-only"
 description  = "Transport engine of the Yog-Pipes mod"
 publish      = false
