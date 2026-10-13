@@ -17,7 +17,7 @@ pub mod signal;
 use crate::ids::{CapId, EpTypeId, Face, NetId, NodeId, Pos, ResId};
 use crate::indicate::Indication;
 use crate::layer::{Layer, Port};
-use crate::registry::{Registry, SideMode};
+use crate::registry::Registry;
 
 // ── Host interface ───────────────────────────────────────────────────────────
 
@@ -192,24 +192,15 @@ impl Cx<'_> {
     /// Whether the network may insert into this port now.
     pub fn sink(&self, port: Port) -> bool {
         let side = self.layer.side(port.node, port.face);
-        !side.disabled
-            && side.mode.inserts()
-            && self
-                .reg
-                .endpoint(self.layer.endpoint(port.ep).ty)
-                .can_insert
+        let ty = self.reg.endpoint(self.layer.endpoint(port.ep).ty);
+        !side.disabled && side.mode.inserts(ty.can_insert)
     }
 
     /// Whether the network may extract from this port now.
     pub fn source(&self, port: Port) -> bool {
         let side = self.layer.side(port.node, port.face);
-        !side.disabled
-            && side.mode.extracts()
-            && side.mode != SideMode::Off
-            && self
-                .reg
-                .endpoint(self.layer.endpoint(port.ep).ty)
-                .can_extract
+        let ty = self.reg.endpoint(self.layer.endpoint(port.ep).ty);
+        !side.disabled && side.mode.extracts(ty.can_insert, ty.can_extract)
     }
 
     /// Endpoint plus side priority.

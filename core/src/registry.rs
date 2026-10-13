@@ -203,23 +203,47 @@ impl Filters {
 
 // ── Side configuration ───────────────────────────────────────────────────────
 
-/// What a node's face does: toward a pipe, `Off` cuts the link; toward an
-/// endpoint, `In` = the network only inserts there, `Out` = only extracts.
+/// What a node's face does: toward a pipe, `Off` cuts the link (anything
+/// else links); toward an endpoint, `In` = the network only inserts there,
+/// `Out` = only extracts, `Both` = both, `Off` = not connected.
+///
+/// `Auto` (the default) toward an endpoint inserts if the endpoint takes
+/// anything and extracts only from pure sources (a generator, a pump) —
+/// so a chest next to a pipe is filled, never emptied, until the player
+/// sets that side to `Out` (EnderIO / Mekanism / Pipez semantics; design
+/// choice D8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SideMode {
     #[default]
-    Both,
+    Auto,
     In,
     Out,
+    Both,
     Off,
 }
 
 impl SideMode {
-    pub fn inserts(self) -> bool {
-        matches!(self, SideMode::Both | SideMode::In)
+    /// Whether the network inserts through this side into an endpoint
+    /// that can (`can_insert`) / can't be extracted from (`can_extract`).
+    pub fn inserts(self, can_insert: bool) -> bool {
+        can_insert && matches!(self, SideMode::Auto | SideMode::Both | SideMode::In)
     }
-    pub fn extracts(self) -> bool {
-        matches!(self, SideMode::Both | SideMode::Out)
+    pub fn extracts(self, can_insert: bool, can_extract: bool) -> bool {
+        can_extract
+            && match self {
+                SideMode::Auto => !can_insert,
+                SideMode::Both | SideMode::Out => true,
+                SideMode::In | SideMode::Off => false,
+            }
+    }
+    pub fn from_index(i: u8) -> SideMode {
+        match i {
+            0 => SideMode::Auto,
+            1 => SideMode::In,
+            2 => SideMode::Out,
+            3 => SideMode::Both,
+            _ => SideMode::Off,
+        }
     }
 }
 

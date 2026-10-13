@@ -1349,12 +1349,7 @@ impl Engine {
             for _ in 0..d.u32().ok_or_else(bad)? {
                 let pos = d.pos(&mut self.reg).ok_or_else(bad)?;
                 let face = d.face().ok_or_else(bad)?;
-                let mode = match d.u8().ok_or_else(bad)? {
-                    0 => SideMode::Both,
-                    1 => SideMode::In,
-                    2 => SideMode::Out,
-                    _ => SideMode::Off,
-                };
+                let mode = SideMode::from_index(d.u8().ok_or_else(bad)?);
                 let disabled = d.u8().ok_or_else(bad)? != 0;
                 let priority = d.i32().ok_or_else(bad)?;
                 let colour = d.u8().ok_or_else(bad)?;
