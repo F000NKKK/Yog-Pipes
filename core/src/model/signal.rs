@@ -82,7 +82,11 @@ impl Signal {
         if self.attenuation == 0 {
             st.levels.get(channel as usize).copied().unwrap_or(0)
         } else {
-            st.nodes.get(&node).and_then(|v| v.get(channel as usize)).copied().unwrap_or(0)
+            st.nodes
+                .get(&node)
+                .and_then(|v| v.get(channel as usize))
+                .copied()
+                .unwrap_or(0)
         }
     }
 
@@ -103,8 +107,8 @@ impl Signal {
         if self.attenuation == 0 {
             st.levels = vec![0; ch];
             for (_, l) in &sources {
-                for c in 0..ch {
-                    st.levels[c] = st.levels[c].max(l[c]);
+                for (dst, &src) in st.levels.iter_mut().zip(l) {
+                    *dst = (*dst).max(src);
                 }
             }
         } else {
@@ -144,7 +148,11 @@ impl Signal {
         st.dirty = false;
 
         // Listeners.
-        let ports = cx.layer.net(net).map(|n| n.ports.clone()).unwrap_or_default();
+        let ports = cx
+            .layer
+            .net(net)
+            .map(|n| n.ports.clone())
+            .unwrap_or_default();
         for p in ports {
             let ty = cx.layer.endpoint(p.ep).ty;
             if !cx.reg.endpoint(ty).listens_signals || cx.layer.side(p.node, p.face).disabled {
@@ -188,6 +196,10 @@ impl Signal {
 }
 
 impl Model for Signal {
+    fn reset(&mut self) {
+        *self = Signal::new(self.channels, self.attenuation);
+    }
+
     fn params(&self) -> &'static [&'static str] {
         &[]
     }
@@ -233,7 +245,10 @@ impl Model for Signal {
             return;
         }
         let level = level.min(MAX_LEVEL);
-        let e = self.emitters.entry(at).or_insert_with(|| vec![0; self.channels as usize]);
+        let e = self
+            .emitters
+            .entry(at)
+            .or_insert_with(|| vec![0; self.channels as usize]);
         if e[channel as usize] == level {
             return;
         }

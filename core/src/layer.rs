@@ -19,9 +19,9 @@
 use std::collections::VecDeque;
 
 use crate::ids::{
-    ChunkKey, EpId, EpTypeId, Face, FxHashMap, FxHashSet, NetId, NodeId, Pos, NO_NODE,
+    ChunkKey, EpId, EpTypeId, Face, FxHashMap, FxHashSet, NO_NODE, NetId, NodeId, Pos,
 };
-use crate::registry::{groups_meet, Attach, Side, SideMode};
+use crate::registry::{Attach, Side, SideMode, groups_meet};
 
 /// "No network" in a node (only between insertion and settling).
 const NO_NET: u32 = u32::MAX;
@@ -384,7 +384,9 @@ impl Layer {
         self.net(id).map_or(0.0, |n| {
             n.types
                 .iter()
-                .map(|&(a, c)| self.atts[a as usize].params.get(p).copied().unwrap_or(0.0) * c as f64)
+                .map(|&(a, c)| {
+                    self.atts[a as usize].params.get(p).copied().unwrap_or(0.0) * c as f64
+                })
                 .sum()
         })
     }
@@ -525,7 +527,12 @@ impl Layer {
 
     /// Link two settled nodes; merges their networks if they differ.
     /// Returns `(into, from, from's size)` when a merge happened.
-    pub fn link_settled(&mut self, a: NodeId, face: Face, b: NodeId) -> Option<(NetId, NetId, u32)> {
+    pub fn link_settled(
+        &mut self,
+        a: NodeId,
+        face: Face,
+        b: NodeId,
+    ) -> Option<(NetId, NetId, u32)> {
         self.link_raw(a, face, b);
         let (na, nb) = (self.net_of(a)?, self.net_of(b)?);
         if na == nb {
@@ -954,7 +961,8 @@ impl Layer {
             let mut dist: FxHashMap<NodeId, u32> = FxHashMap::default();
             let mut queue = VecDeque::from([(from, 0u32)]);
             self.nodes[from.index()].mark = base;
-            let want: FxHashSet<NodeId> = self.net(id).unwrap().ports.iter().map(|p| p.node).collect();
+            let want: FxHashSet<NodeId> =
+                self.net(id).unwrap().ports.iter().map(|p| p.node).collect();
             let mut left = want.len();
             while let Some((c, d)) = queue.pop_front() {
                 if want.contains(&c) {

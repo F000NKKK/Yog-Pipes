@@ -61,6 +61,10 @@ fn loss_for(hops: u32, milli: u64) -> u64 {
 }
 
 impl Model for Routed {
+    fn reset(&mut self) {
+        *self = Self::new();
+    }
+
     fn params(&self) -> &'static [&'static str] {
         PARAMS
     }
@@ -93,7 +97,8 @@ impl Model for Routed {
             };
             let colour = cx.layer.side(src.node, src.face).colour;
             self.dist.clear();
-            self.dist.extend_from_slice(cx.layer.port_distances(src.node));
+            self.dist
+                .extend_from_slice(cx.layer.port_distances(src.node));
             self.cands.clear();
             for (i, &p) in self.ports.iter().enumerate() {
                 if p.ep != src.ep && cx.sink(p) {
@@ -171,12 +176,20 @@ impl Model for Routed {
                 left -= put + loss;
                 let at = cx.layer.endpoint(port.ep).pos;
                 if loss > 0 {
-                    cx.event(Event::Lost { at, res, amount: loss });
+                    cx.event(Event::Lost {
+                        at,
+                        res,
+                        amount: loss,
+                    });
                 }
                 let ep_limit = cx.reg.endpoint(cx.layer.endpoint(port.ep).ty).max_packet;
                 for lim in [limit, ep_limit] {
                     if lim > 0 && put > lim {
-                        cx.event(Event::Overload { at, amount: put, limit: lim });
+                        cx.event(Event::Overload {
+                            at,
+                            amount: put,
+                            limit: lim,
+                        });
                         break;
                     }
                 }
@@ -195,7 +208,11 @@ impl Model for Routed {
                         left -= put + loss;
                         if loss > 0 {
                             let at = cx.layer.endpoint(self.ports[i].ep).pos;
-                            cx.event(Event::Lost { at, res, amount: loss });
+                            cx.event(Event::Lost {
+                                at,
+                                res,
+                                amount: loss,
+                            });
                         }
                     }
                 }

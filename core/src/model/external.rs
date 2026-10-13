@@ -33,7 +33,10 @@ impl External {
     /// `params` are the attach parameter names the external model reads
     /// (leaked once per registration — capabilities live for the session).
     pub fn new(driver: Box<dyn Driver>, params: Vec<String>) -> Self {
-        let params: Vec<&'static str> = params.into_iter().map(|p| &*Box::leak(p.into_boxed_str())).collect();
+        let params: Vec<&'static str> = params
+            .into_iter()
+            .map(|p| &*Box::leak(p.into_boxed_str()))
+            .collect();
         External {
             driver,
             params: Box::leak(params.into_boxed_slice()),
@@ -43,6 +46,10 @@ impl External {
 }
 
 impl Model for External {
+    fn reset(&mut self) {
+        self.states = NetMap::default();
+    }
+
     fn params(&self) -> &'static [&'static str] {
         self.params
     }

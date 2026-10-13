@@ -15,7 +15,7 @@
 //! spilled (the capability's event hook decides what that means).
 
 use crate::ids::{Face, FxHashMap, NetId, NodeId, Pos, ResId};
-use crate::layer::{Layer, Port, HOP_HERE};
+use crate::layer::{HOP_HERE, Layer, Port};
 use crate::model::buffered::cx_priority;
 use crate::model::{Activity, Cx, Model, NetMap, Record, Want};
 use crate::persist::{Dec, Enc};
@@ -48,6 +48,17 @@ pub struct Unit {
     pub colour: u8,
     pub returning: bool,
     pub wait_until: u64,
+}
+
+/// What [`InFlight::target`] looks for.
+struct Seek {
+    from: NodeId,
+    res: ResId,
+    amount: u64,
+    colour: u8,
+    /// Endpoint position not to pick (the unit's source).
+    except: Option<Pos>,
+    rr: usize,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -91,7 +102,15 @@ impl InFlight {
 
     /// Pick a sink (≠ `except` endpoint position) accepting some of the
     /// unit; returns the port and how much it would take.
-    fn target(&mut self, cx: &mut Cx, net: NetId, from: NodeId, res: ResId, amount: u64, colour: u8, except: Option<Pos>, rr: usize) -> Option<(Port, u64)> {
+    fn target(&mut self, cx: &mut Cx, net: NetId, q: Seek) -> Option<(Port, u64)> {
+        let Seek {
+            from,
+            res,
+            amount,
+            colour,
+            except,
+            rr,
+        } = q;
         let n = cx.layer.net(net)?;
         self.ports.clear();
         self.ports.extend_from_slice(&n.ports);
@@ -104,7 +123,14 @@ impl InFlight {
         }
         let policy = cx.reg.cap(cx.cap).policy;
         let ports = &self.ports;
-        order(policy, &mut self.cands, rr, cx.rng, |i| cx_priority(cx.layer, cx.reg, ports[i]), |i| dist[i]);
+        order(
+            policy,
+            &mut self.cands,
+            rr,
+            cx.rng,
+            |i| cx_priority(cx.layer, cx.reg, ports[i]),
+            |i| dist[i],
+        );
         for k in 0..self.cands.len() {
             let p = self.ports[self.cands[k]];
             let acc = cx.insert(p, res, amount, colour, true);
@@ -118,7 +144,11 @@ impl InFlight {
     /// A unit reached its destination node: deliver, or decide what next.
     /// Returns `true` when it is gone.
     fn arrive(&mut self, cx: &mut Cx, net: NetId, u: &mut Unit, rr: usize) -> bool {
-        let ports = cx.layer.net(net).map(|n| n.ports.clone()).unwrap_or_default();
+        let ports = cx
+            .layer
+            .net(net)
+            .map(|n| n.ports.clone())
+            .unwrap_or_default();
         if let Some((node, face)) = u.dest
             && let Some(&port) = ports.iter().find(|p| p.node == node && p.face == face)
         {
@@ -139,7 +169,18 @@ impl InFlight {
     fn retarget(&mut self, cx: &mut Cx, net: NetId, u: &mut Unit, rr: usize) {
         u.progress = 0;
         if !u.returning
-            && let Some((p, _)) = self.target(cx, net, u.node, u.res, u.amount, u.colour, None, rr)
+            && let Some((p, _)) = self.target(
+                cx,
+                net,
+                Seek {
+                    from: u.node,
+                    res: u.res,
+                    amount: u.amount,
+                    colour: u.colour,
+                    except: None,
+                    rr,
+                },
+            )
         {
             u.dest = Some((p.node, p.face));
             return;
@@ -166,6 +207,10 @@ impl InFlight {
 }
 
 impl Model for InFlight {
+    fn reset(&mut self) {
+        *self = Self::new();
+    }
+
     fn params(&self) -> &'static [&'static str] {
         PARAMS
     }
@@ -204,7 +249,11 @@ impl Model for InFlight {
         let units = std::mem::take(&mut self.nets.entry(from).units);
         for u in units {
             let net = cx.layer.net_of(u.node).unwrap_or(from);
-            let target = if parts.iter().any(|p| p.0 == net) { net } else { from };
+            let target = if parts.iter().any(|p| p.0 == net) {
+                net
+            } else {
+                from
+            };
             self.nets.entry(target).units.push(u);
         }
     }
@@ -239,7 +288,18 @@ impl Model for InFlight {
                 };
                 let colour = cx.layer.side(src.node, src.face).colour;
                 let src_pos = cx.layer.endpoint(src.ep).pos;
-                let Some((dest, acc)) = self.target(cx, net, src.node, res, n, colour, Some(src_pos), st.rr) else {
+                let Some((dest, acc)) = self.target(
+                    cx,
+                    net,
+                    Seek {
+                        from: src.node,
+                        res,
+                        amount: n,
+                        colour,
+                        except: Some(src_pos),
+                        rr: st.rr,
+                    },
+                ) else {
                     continue;
                 };
                 let Some((_, got)) = cx.extract(src, Want::Res(res), n.min(acc), false) else {
@@ -317,7 +377,11 @@ impl Model for InFlight {
             }
             for u in &n.units {
                 let mut e = Enc::default();
-                e.res(reg, u.res).u64(u.amount).u32(u.progress).u8(u.colour).u8(u.returning as u8);
+                e.res(reg, u.res)
+                    .u64(u.amount)
+                    .u32(u.progress)
+                    .u8(u.colour)
+                    .u8(u.returning as u8);
                 e.pos(reg, u.source.0).face(u.source.1);
                 match u.dest {
                     Some((d, f)) => e.u8(1).pos(reg, layer.node(d).pos).face(f),

@@ -358,7 +358,9 @@ pub struct Capability {
 impl Capability {
     /// Whether this capability carries resources of `kind`.
     pub fn carries(&self, kinds: &Kinds, kind: KindId) -> bool {
-        self.kinds.iter().any(|&k| kinds.convertible(kind, k).is_some())
+        self.kinds
+            .iter()
+            .any(|&k| kinds.convertible(kind, k).is_some())
     }
 }
 
@@ -415,7 +417,12 @@ impl Registry {
 
     /// Endpoint types of capability `cap` that apply at `pos` holding
     /// block `block` (positional ones win over block ones).
-    pub fn endpoint_type(&self, cap: CapId, pos: Pos, block: Option<BlockTypeId>) -> Option<EpTypeId> {
+    pub fn endpoint_type(
+        &self,
+        cap: CapId,
+        pos: Pos,
+        block: Option<BlockTypeId>,
+    ) -> Option<EpTypeId> {
         if let Some(list) = self.positional.get(&pos)
             && let Some(&t) = list.iter().find(|&&t| self.endpoint(t).cap == cap)
         {

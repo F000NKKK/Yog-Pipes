@@ -123,6 +123,10 @@ impl Flow {
 }
 
 impl Model for Flow {
+    fn reset(&mut self) {
+        *self = Self::new();
+    }
+
     fn params(&self) -> &'static [&'static str] {
         PARAMS
     }
@@ -253,7 +257,8 @@ impl Model for Flow {
                     continue;
                 }
                 let head = |n: NodeId, amount: u64| {
-                    amount + cx.layer.param(n, HEAD) as u64 * pot.get(&n).copied().unwrap_or(0) as u64
+                    amount
+                        + cx.layer.param(n, HEAD) as u64 * pot.get(&n).copied().unwrap_or(0) as u64
                 };
                 let (ha, hb) = (head(a, sa.amount), head(b, sb.amount));
                 if ha <= hb + 1 {

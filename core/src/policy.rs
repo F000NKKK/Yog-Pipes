@@ -36,7 +36,7 @@ pub fn order(
         }
         Policy::Random => {
             for i in (1..n).rev() {
-                let j = (rng.next() % (i as u64 + 1)) as usize;
+                let j = (rng.next_u64() % (i as u64 + 1)) as usize;
                 cands.swap(i, j);
             }
         }
@@ -93,7 +93,14 @@ mod tests {
     fn priority_keeps_rotation_within_a_level() {
         let mut c = vec![0, 1, 2, 3];
         let mut rng = Rng(1);
-        order(Policy::Priority, &mut c, 1, &mut rng, |i| (i == 3) as i32, |_| 0);
+        order(
+            Policy::Priority,
+            &mut c,
+            1,
+            &mut rng,
+            |i| (i == 3) as i32,
+            |_| 0,
+        );
         assert_eq!(c, vec![3, 1, 2, 0]);
     }
 }

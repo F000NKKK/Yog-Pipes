@@ -108,6 +108,10 @@ impl Buffered {
 }
 
 impl Model for Buffered {
+    fn reset(&mut self) {
+        *self = Self::new();
+    }
+
     fn params(&self) -> &'static [&'static str] {
         PARAMS
     }

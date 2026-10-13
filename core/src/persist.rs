@@ -2,9 +2,9 @@
 //! and dimensions are written by name, never by interned id, so a save
 //! survives registration order changing between runs.
 
+use crate::ids::ResId;
 use crate::ids::{Face, Pos};
 use crate::registry::Registry;
-use crate::ids::ResId;
 
 #[derive(Default)]
 pub struct Enc {

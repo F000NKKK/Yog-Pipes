@@ -64,7 +64,14 @@ pub enum Event {
 /// handler dispatch, or a mock in tests).
 pub trait Io {
     /// Offer `amount` of `res`; returns what was (or would be) accepted.
-    fn insert(&mut self, reg: &Registry, call: &Call, res: ResId, amount: u64, simulate: bool) -> u64;
+    fn insert(
+        &mut self,
+        reg: &Registry,
+        call: &Call,
+        res: ResId,
+        amount: u64,
+        simulate: bool,
+    ) -> u64;
     /// Take up to `max`; returns what was (or would be) given.
     fn extract(
         &mut self,
@@ -136,6 +143,8 @@ pub trait Model: Send {
         Vec::new()
     }
     fn load_global(&mut self, _reg: &mut Registry, _bytes: &[u8]) {}
+    /// Drop all world state (the world closed); configuration stays.
+    fn reset(&mut self);
 }
 
 // ── Context ──────────────────────────────────────────────────────────────────
@@ -145,7 +154,7 @@ pub trait Model: Send {
 pub struct Rng(pub u64);
 
 impl Rng {
-    pub fn next(&mut self) -> u64 {
+    pub fn next_u64(&mut self) -> u64 {
         let mut x = self.0.max(1);
         x ^= x >> 12;
         x ^= x << 25;
@@ -185,7 +194,10 @@ impl Cx<'_> {
         let side = self.layer.side(port.node, port.face);
         !side.disabled
             && side.mode.inserts()
-            && self.reg.endpoint(self.layer.endpoint(port.ep).ty).can_insert
+            && self
+                .reg
+                .endpoint(self.layer.endpoint(port.ep).ty)
+                .can_insert
     }
 
     /// Whether the network may extract from this port now.
@@ -194,7 +206,10 @@ impl Cx<'_> {
         !side.disabled
             && side.mode.extracts()
             && side.mode != SideMode::Off
-            && self.reg.endpoint(self.layer.endpoint(port.ep).ty).can_extract
+            && self
+                .reg
+                .endpoint(self.layer.endpoint(port.ep).ty)
+                .can_extract
     }
 
     /// Endpoint plus side priority.
@@ -208,7 +223,11 @@ impl Cx<'_> {
     /// conversion `(num, den)`.
     fn accepts(&self, port: Port, res: ResId, colour: u8) -> Option<(u64, u64)> {
         let side = self.layer.side(port.node, port.face);
-        if !self.reg.filters.passes(side.filter, &self.reg.resources, res, colour) {
+        if !self
+            .reg
+            .filters
+            .passes(side.filter, &self.reg.resources, res, colour)
+        {
             return None;
         }
         let kind = self.reg.resources.kind(res);
@@ -229,7 +248,14 @@ impl Cx<'_> {
     /// offered, so the sink always receives exactly the value debited; a
     /// sink that accepts a partial step is debited the whole step and the
     /// difference is reported as [`Event::Lost`].
-    pub fn insert(&mut self, port: Port, res: ResId, amount: u64, colour: u8, simulate: bool) -> u64 {
+    pub fn insert(
+        &mut self,
+        port: Port,
+        res: ResId,
+        amount: u64,
+        colour: u8,
+        simulate: bool,
+    ) -> u64 {
         if amount == 0 || !self.sink(port) {
             return 0;
         }
@@ -252,15 +278,23 @@ impl Cx<'_> {
             .kinds
             .iter()
             .copied()
-            .find(|&k| self.reg.kinds.convertible(self.reg.resources.kind(res), k).is_some())
+            .find(|&k| {
+                self.reg
+                    .kinds
+                    .convertible(self.reg.resources.kind(res), k)
+                    .is_some()
+            })
             .unwrap();
         let name = self.reg.kinds.get(target_kind).name.clone();
-        let converted = self.reg.resources.intern(&self.reg.kinds, target_kind, &name, &[]);
+        let converted = self
+            .reg
+            .resources
+            .intern(&self.reg.kinds, target_kind, &name, &[]);
         let offer = steps * step_sink;
         let got = self.io.insert(self.reg, &call, converted, offer, simulate);
         let got = self.clamp(got, offer, &call);
         let debit = got.div_ceil(step_sink) * step_net;
-        if !simulate && got % step_sink != 0 {
+        if !simulate && !got.is_multiple_of(step_sink) {
             let value = got * step_net / step_sink;
             self.event(Event::Lost {
                 at: call.at,
@@ -275,7 +309,13 @@ impl Cx<'_> {
     /// `max`, must be a kind the capability carries and must pass the
     /// side filter; anything else is refused (a real extraction that
     /// returns something unexpected is put back, or spilled).
-    pub fn extract(&mut self, port: Port, want: Want, max: u64, simulate: bool) -> Option<(ResId, u64)> {
+    pub fn extract(
+        &mut self,
+        port: Port,
+        want: Want,
+        max: u64,
+        simulate: bool,
+    ) -> Option<(ResId, u64)> {
         if max == 0 || !self.source(port) {
             return None;
         }
@@ -293,7 +333,10 @@ impl Cx<'_> {
         let ok = match want {
             Want::Res(r) => r == res,
             _ => true,
-        } && self.reg.filters.passes(side.filter, &self.reg.resources, res, side.colour)
+        } && self
+            .reg
+            .filters
+            .passes(side.filter, &self.reg.resources, res, side.colour)
             && self
                 .reg
                 .cap(self.cap)
@@ -328,7 +371,10 @@ impl Cx<'_> {
 
     fn clamp(&mut self, got: u64, asked: u64, call: &Call) -> u64 {
         if got > asked {
-            log_once(call.handler, "handler claimed more than it was asked for; clamped");
+            log_once(
+                call.handler,
+                "handler claimed more than it was asked for; clamped",
+            );
             asked
         } else {
             got

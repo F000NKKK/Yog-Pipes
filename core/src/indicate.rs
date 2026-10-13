@@ -43,6 +43,13 @@ pub fn quantise(num: u64, den: u64, levels: u8) -> u8 {
 }
 
 impl Indication {
+    pub fn new(levels: Vec<u8>) -> Self {
+        Indication {
+            levels,
+            ..Default::default()
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.levels.is_empty()
     }
@@ -52,7 +59,10 @@ impl Indication {
             return;
         };
         let v = quantise(num, den, levels);
-        let shown = self.shown.get(node.index()).map_or(0, |s| s[index as usize]);
+        let shown = self
+            .shown
+            .get(node.index())
+            .map_or(0, |s| s[index as usize]);
         let bit = 1u8 << index;
         match self.node_vals.get_mut(&node) {
             Some((mask, vals)) => {
@@ -74,7 +84,10 @@ impl Indication {
         };
         let v = quantise(num, den, levels);
         self.net_level |= 1 << index;
-        let e = self.net_vals.entry(net.index).or_insert((net.generation, [0; MAX_INDICATORS]));
+        let e = self
+            .net_vals
+            .entry(net.index)
+            .or_insert((net.generation, [0; MAX_INDICATORS]));
         if e.0 != net.generation {
             *e = (net.generation, [0; MAX_INDICATORS]);
         }
@@ -101,11 +114,14 @@ impl Indication {
             return;
         }
         let set = self.net_level;
-        let e = self.node_vals.entry(node).or_insert((0, [0; MAX_INDICATORS]));
-        for i in 0..MAX_INDICATORS {
+        let e = self
+            .node_vals
+            .entry(node)
+            .or_insert((0, [0; MAX_INDICATORS]));
+        for (i, &v) in vals.iter().enumerate() {
             if set & (1 << i) != 0 && e.0 & (1 << i) == 0 {
                 e.0 |= 1 << i;
-                e.1[i] = vals[i];
+                e.1[i] = v;
             }
         }
     }
@@ -132,7 +148,8 @@ impl Indication {
             return;
         }
         if self.shown.len() < layer.node_capacity() {
-            self.shown.resize(layer.node_capacity(), [0; MAX_INDICATORS]);
+            self.shown
+                .resize(layer.node_capacity(), [0; MAX_INDICATORS]);
         }
         let mut nodes = std::mem::take(&mut self.scratch);
         for index in std::mem::take(&mut self.dirty_nets) {
@@ -170,8 +187,14 @@ impl Indication {
                 }
             }
         }
-        self.net_vals
-            .retain(|&i, (g, _)| layer.net(NetId { index: i, generation: *g }).is_some());
+        self.net_vals.retain(|&i, (g, _)| {
+            layer
+                .net(NetId {
+                    index: i,
+                    generation: *g,
+                })
+                .is_some()
+        });
     }
 }
 
