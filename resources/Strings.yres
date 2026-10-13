@@ -1,0 +1,10 @@
+{
+  "mod_name": {
+    "value": "Yog Pipes",
+    "comment": "The mod's name (yog.toml name), shown in mod lists"
+  },
+  "mod_description": {
+    "value": "Pipe framework for Yog mods: pipe networks kept in step with the world, payload routing (broadcast or point-to-point) and delivery to handlers. Mods declare their own pipe blocks; what a pipe carries is up to them.",
+    "comment": "yog.toml description"
+  }
+}

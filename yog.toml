@@ -1,12 +1,13 @@
 [mod]
 id          = "yog-pipes"
-name        = "Yog Pipes"
-version     = "0.3.2"
-description = "Pipe framework for Yog mods — transfer items, fluids and signals between blocks. Built-in signal propagation lets blocks communicate through the pipe network."
+name        = "@Strings.mod_name"
+version     = "0.4.0"
+description = "@Strings.mod_description"
 authors     = ["Yog Team"]
 license     = "AGPL-3.0-only"
 
 [dependencies]
+yog-api = "0.92"
 
 [run.fabric-1.21.1]
 name       = "Fabric 1.21.1"
