@@ -1,8 +1,4 @@
 {
-  "explorer.fileNesting.enabled": true,
-  "explorer.fileNesting.patterns": {
-    "*.rs": "${capture}.designer.rs"
-  },
   "rust-analyzer.linkedProjects": [
     ".yog-build/Cargo.toml"
   ]
