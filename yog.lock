@@ -40,7 +40,7 @@ checksum = "89385e82b5d1821d2219e0b095efa2cc1f246cbf99080f3be46a1a85c0d392d9"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -201,7 +201,7 @@ checksum = "4568f25ccbd45ab5d5603dc34318c1ec56b117531781260002151b8530a9f931"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -255,7 +255,7 @@ checksum = "7347867d0a7e1208d93b46767be83e2b8f978c3dad35f775ac8d8847551d6fe1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -312,7 +312,7 @@ checksum = "c0ed1a78a1b19d184b0daa629dd9a024573173ec7d485b287cb369fb3607cc1c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -348,7 +348,7 @@ checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -387,6 +387,17 @@ name = "syn"
 version = "2.0.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b9ae57f904213ebb649ce6895b8a66c66f0203b9319718f69a5612a065b1422"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "syn"
+version = "3.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -456,7 +467,7 @@ dependencies = [
  "bumpalo",
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
  "wasm-bindgen-shared",
 ]
 
@@ -471,15 +482,15 @@ dependencies = [
 
 [[package]]
 name = "yog-abi"
-version = "0.28.1"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38cf9237f3cd633bfa9a47b32ce16050f2e645fee16beff555da3ad6b035ec3d"
+checksum = "25c7825105d390e604067b97b2814466b20491defb53877e6b3e1dcbfa8a028f"
 
 [[package]]
 name = "yog-api"
-version = "0.92.1"
+version = "0.92.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fc66ce324e2d35cee8ba88f3987410ca113ee0d2379c57c3f5758fb5ecaf67c"
+checksum = "6422606f09f7750d88efcfe5575eddd6431c3d0aeb6a4ac3d532efd62e6b3164"
 dependencies = [
  "ctor",
  "rkyv",
@@ -531,9 +542,9 @@ checksum = "d712d79a3e046f0482232c1dc59400e23f85f60935758b7bbcf2a02ed288e981"
 
 [[package]]
 name = "yog-core"
-version = "0.3.1"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b646311e42a25a64b36bdeb551cf3bfe2ffff0bab7e4173011ccbc343801d92"
+checksum = "5c1461cb00b45fea43054008a23272f95cf2d63f2145d01e0aad37d7058fa396"
 
 [[package]]
 name = "yog-dimensions"
@@ -575,13 +586,13 @@ dependencies = [
 
 [[package]]
 name = "yog-interop"
-version = "0.21.0"
+version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8343bd174f25962bff57e5136d5ea380e3db1a81e58b644f355a736750371f30"
+checksum = "1351231d68acaaddd88a13acbd070ea30dff9855aac31cffe837c9d6f5cc7886"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -648,9 +659,9 @@ checksum = "d300b68e1172c9cec95fee547a1cf641cc7063562b5851b91017814d39beb045"
 
 [[package]]
 name = "yog-ui"
-version = "0.40.1"
+version = "0.40.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "800be7ef75dbb26c7db05f839c4a289ea2572aa363dfce1b4ffe5b0f6139b8d8"
+checksum = "e55bf8889fa95fff26c90d51dd606990cba0d30b45f3c45c4a6eb804bab3ceca"
 dependencies = [
  "yog-abi",
  "yog-gfx",
