@@ -2,12 +2,12 @@
 //! exported items stay one-line calls: `yog publish exports` copies them
 //! into the exports crate, which knows nothing of the engine.
 
-use yog_pipes_core::engine::{
+use crate::transport::engine::{
     AttachDef as CoreAttach, CapabilityDef as CoreCapability, EndpointDef as CoreEndpoint,
     ModelSpec, TargetDef,
 };
-use yog_pipes_core::ids::{Face, Pos};
-use yog_pipes_core::registry::{
+use crate::transport::ids::{Face, Pos};
+use crate::transport::registry::{
     Conversion as CoreConversion, Indicator, IndicatorSource as CoreSource, Kind,
     KindForm as CoreForm, MergeRule as CoreMerge, Policy, Side, SideMode as CoreMode,
 };
@@ -21,14 +21,14 @@ use crate::types::{
     SideDef, SideMode,
 };
 
-fn cap_id(host: &Host, name: &str) -> Result<yog_pipes_core::ids::CapId, String> {
+fn cap_id(host: &Host, name: &str) -> Result<crate::transport::ids::CapId, String> {
     host.engine
         .reg
         .cap_id(name)
         .ok_or_else(|| format!("unknown capability `{name}`"))
 }
 
-fn network_id(net: yog_pipes_core::ids::NetId) -> u64 {
+fn network_id(net: crate::transport::ids::NetId) -> u64 {
     (u64::from(net.generation) << 32) | u64::from(net.index)
 }
 
@@ -381,7 +381,7 @@ pub(crate) fn pipe_info(pos: PipePos) -> Result<Vec<PipeInfo>, String> {
         let e = &host.engine;
         let mut out = Vec::new();
         for (c, cap) in e.reg.caps.iter().enumerate() {
-            let layer = e.layer(yog_pipes_core::ids::CapId(c as u16));
+            let layer = e.layer(crate::transport::ids::CapId(c as u16));
             let Some(node) = layer.node_at(p) else {
                 continue;
             };
@@ -392,7 +392,7 @@ pub(crate) fn pipe_info(pos: PipePos) -> Result<Vec<PipeInfo>, String> {
                     let s = layer.side(node, f);
                     FaceInfo {
                         face: bridge::face(f),
-                        linked: n.links[f as usize] != yog_pipes_core::ids::NO_NODE,
+                        linked: n.links[f as usize] != crate::transport::ids::NO_NODE,
                         endpoint: layer.endpoint_at(p.offset(f)).is_some(),
                         mode: side_mode(s.mode),
                         disabled: s.disabled,

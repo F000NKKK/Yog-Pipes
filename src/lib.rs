@@ -31,8 +31,13 @@ mod ops;
 mod persist;
 mod types;
 
+// Imported as `crate::transport::…` everywhere: `yog publish exports` copies
+// a mod's `use` lines into the exports crate, which doesn't depend on the
+// engine (`pub(crate) use` lines are left out).
+pub(crate) use yog_pipes_core as transport;
+
+use crate::transport::ids::Pos;
 use yog_api::{EventPhase, Mod, Registry, Server, info};
-use yog_pipes_core::ids::Pos;
 
 pub use api::*;
 pub use types::*;

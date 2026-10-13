@@ -10,10 +10,10 @@
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use crate::transport::ids::{Face, Pos, ResId, normalize_dim};
+use crate::transport::model::Want as CoreWant;
+use crate::transport::registry::{Filter, FilterEntry, FilterMode, Registry};
 use yog_api::rkyv;
-use yog_pipes_core::ids::{Face, Pos, ResId, normalize_dim};
-use yog_pipes_core::model::Want as CoreWant;
-use yog_pipes_core::registry::{Filter, FilterEntry, FilterMode, Registry};
 
 use crate::types::{
     FilterDef, FilterRule, Handler, PipeFace, PipePayload, PipePos, Resource, Stack, Want,

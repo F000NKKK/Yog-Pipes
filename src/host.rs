@@ -11,11 +11,11 @@
 use std::cell::Cell;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
+use crate::transport::engine::{Engine, Probe};
+use crate::transport::ids::{BlockTypeId, CapId, FxHashMap, Pos, ResId};
+use crate::transport::model::{Call, Event, Io, Want};
+use crate::transport::registry::Registry;
 use yog_api::Server;
-use yog_pipes_core::engine::{Engine, Probe};
-use yog_pipes_core::ids::{BlockTypeId, CapId, FxHashMap, Pos, ResId};
-use yog_pipes_core::model::{Call, Event, Io, Want};
-use yog_pipes_core::registry::Registry;
 
 use crate::bridge::{self, Target, call};
 use crate::types::{EndpointCall, EndpointDef, EndpointOp, EndpointReply, Handler, PipeEvent};

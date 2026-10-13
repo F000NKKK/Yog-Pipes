@@ -4,10 +4,10 @@
 //! I/O it asks for through the engine's checked `Cx` calls, then calls it
 //! again with the results — so the model books exactly what moved.
 
-use yog_pipes_core::ids::{NetId, NodeId};
-use yog_pipes_core::layer::Port;
-use yog_pipes_core::model::external::Driver;
-use yog_pipes_core::model::{Activity, Cx};
+use crate::transport::ids::{NetId, NodeId};
+use crate::transport::layer::Port;
+use crate::transport::model::external::Driver;
+use crate::transport::model::{Activity, Cx};
 
 use crate::bridge::{self, Target, call};
 use crate::types::{
