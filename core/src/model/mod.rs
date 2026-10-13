@@ -128,6 +128,14 @@ pub trait Model: Send {
     fn level(&self, _layer: &Layer, _at: Pos, _channel: u8) -> u8 {
         0
     }
+    /// The block at `at` is gone (whatever it was): drop state keyed by
+    /// that position (signal emitters).
+    fn forget(&mut self, _cx: &mut Cx, _at: Pos) {}
+    /// Position-independent state, saved once per capability.
+    fn save_global(&self, _reg: &Registry) -> Vec<u8> {
+        Vec::new()
+    }
+    fn load_global(&mut self, _reg: &mut Registry, _bytes: &[u8]) {}
 }
 
 // ── Context ──────────────────────────────────────────────────────────────────
