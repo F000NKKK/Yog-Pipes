@@ -67,13 +67,19 @@ impl Mod for YogPipesMod {
         // if some mod registered it (as a pipe or an endpoint) — never by
         // a naming convention. Changes made any other way are picked up
         // through `refresh`.
-        registry.on_player_place_block(|e, phase, srv| {
+        // World changes go through `host::mutate`: a handler that breaks or
+        // places blocks (an overload explosion, a machine swapping its
+        // block) is itself inside an engine step, and its change is applied
+        // right after that step instead of being lost.
+        registry.on_player_place_block(|e, phase, _srv| {
             if phase == EventPhase::Post {
-                let _ = host::with(|host| {
-                    let known = host.engine.reg.block_id(&e.block_id).is_some();
-                    let p = world_pos(host, &e.dimension, e.pos.x, e.pos.y, e.pos.z);
+                let (dim, block) = (e.dimension.clone(), e.block_id.clone());
+                let (x, y, z) = (e.pos.x, e.pos.y, e.pos.z);
+                host::mutate(move |host| {
+                    let known = host.engine.reg.block_id(&block).is_some();
+                    let p = world_pos(host, &dim, x, y, z);
                     if known || host.engine.reg.positional.contains_key(&p) {
-                        host.run(Some(srv), |e, io, probe| e.place(io, probe, p));
+                        host.run(None, |e, io, probe| e.place(io, probe, p));
                     }
                 });
             }
@@ -82,8 +88,10 @@ impl Mod for YogPipesMod {
 
         registry.on_block_break(|e, phase, _srv| {
             if phase == EventPhase::Post {
-                let _ = host::with(|host| {
-                    let p = world_pos(host, &e.dimension, e.pos.x, e.pos.y, e.pos.z);
+                let dim = e.dimension.clone();
+                let (x, y, z) = (e.pos.x, e.pos.y, e.pos.z);
+                host::mutate(move |host| {
+                    let p = world_pos(host, &dim, x, y, z);
                     host.run(None, |e, io, _| e.remove(io, p));
                 });
             }
@@ -92,15 +100,14 @@ impl Mod for YogPipesMod {
 
         // An explosion removes blocks without per-block events: re-check
         // what's known in its reach.
-        registry.on_explosion(|e, phase, srv| {
+        registry.on_explosion(|e, phase, _srv| {
             if phase == EventPhase::Post {
-                let _ = host::with(|host| {
-                    let (x, y, z) = (e.x.floor() as i32, e.y.floor() as i32, e.z.floor() as i32);
-                    let center = world_pos(host, &e.dimension, x, y, z);
-                    let r = blast_radius(e.power);
-                    host.run(Some(srv), |e, io, probe| {
-                        e.revalidate_area(io, probe, center, r)
-                    });
+                let dim = e.dimension.clone();
+                let (x, y, z) = (e.x.floor() as i32, e.y.floor() as i32, e.z.floor() as i32);
+                let r = blast_radius(e.power);
+                host::mutate(move |host| {
+                    let center = world_pos(host, &dim, x, y, z);
+                    host.run(None, |e, io, probe| e.revalidate_area(io, probe, center, r));
                 });
             }
             true
