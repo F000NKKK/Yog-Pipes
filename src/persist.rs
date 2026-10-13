@@ -40,9 +40,15 @@ const UNREADABLE_SUFFIX: &str = ".unreadable";
 const AUTOSAVE_TICKS: u32 = 6000;
 
 /// Where the current world's state lives and the bytes last written there
-/// (to skip rewriting unchanged state). `None` while no world is open or
-/// its directory couldn't be found.
-static TARGET: Mutex<Option<(PathBuf, Vec<u8>, Vec<u8>)>> = Mutex::new(None);
+/// (to skip rewriting unchanged state).
+struct Target {
+    dir: PathBuf,
+    engine: Vec<u8>,
+    endpoints: Vec<u8>,
+}
+
+/// `None` while no world is open or its directory couldn't be found.
+static TARGET: Mutex<Option<Target>> = Mutex::new(None);
 static TICKS: AtomicU32 = AtomicU32::new(0);
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -54,7 +60,7 @@ fn set_aside(store: &mut yog_api::Storage, key: &str, bytes: Vec<u8>, err: &str)
         "[yog-pipes] saved `{key}` in {} is unreadable ({err}); kept as `{key}{UNREADABLE_SUFFIX}`",
         store.path().display()
     );
-    store.set(&format!("{key}{UNREADABLE_SUFFIX}"), bytes);
+    store.set(format!("{key}{UNREADABLE_SUFFIX}"), bytes);
     store.remove(key);
     if let Err(e) = store.flush() {
         yog_api::error!("[yog-pipes] failed to set unreadable state aside: {e}");
@@ -106,12 +112,21 @@ pub fn load(host: &mut Host, srv: &dyn yog_api::Server) {
         host.engine.parked_records(),
         host.positional.len()
     );
-    *lock(&TARGET) = Some((dir, last_engine, last_endpoints));
+    *lock(&TARGET) = Some(Target {
+        dir,
+        engine: last_engine,
+        endpoints: last_endpoints,
+    });
 }
 
 pub fn save(host: &Host) {
     let mut target = lock(&TARGET);
-    let Some((dir, last_engine, last_endpoints)) = target.as_mut() else {
+    let Some(Target {
+        dir,
+        engine: last_engine,
+        endpoints: last_endpoints,
+    }) = target.as_mut()
+    else {
         return;
     };
     let engine = host.engine.save();
