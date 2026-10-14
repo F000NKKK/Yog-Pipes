@@ -481,3 +481,19 @@ fn kind_conversion_is_exact() {
     assert_eq!(left, 1);
     let _ = c;
 }
+
+#[test]
+fn a_signal_is_there_the_tick_it_is_emitted() {
+    let mut s = Sim::new();
+    kinds(&mut s.e);
+    let c = cap(&mut s.e, "test:wire", "wire", &[], ModelSpec::Signal { channels: 1, attenuation: 0 }, Policy::RoundRobin, &[]);
+    attach(&mut s.e, "test:wire", "test:wire", &[], &[]);
+    for x in 0..8 {
+        s.place(p(x, 0, 0), "test:wire");
+    }
+    s.tick(1);
+    s.with_io(|e, io, _| e.emit(io, c, p(0, 0, 0), 0, 15));
+    assert_eq!(s.e.level(c, p(7, 0, 0), 0), 15, "no tick between emitting and reading");
+    s.with_io(|e, io, _| e.emit(io, c, p(0, 0, 0), 0, 0));
+    assert_eq!(s.e.level(c, p(7, 0, 0), 0), 0);
+}

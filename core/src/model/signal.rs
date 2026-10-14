@@ -3,7 +3,8 @@
 //! conduits, AE2-style channels.
 //!
 //! Emitters set levels with `emit(pos, channel, level)` (event-driven, no
-//! polling). Without attenuation a channel's level is the max of its
+//! polling); the network settles at once, so the level is there the same
+//! tick. Without attenuation a channel's level is the max of its
 //! emitters over the whole network; with attenuation every node gets
 //! `max(emitter level − attenuation · distance)` by a multi-source BFS that
 //! stops where the level reaches 0. Listeners (`on_signal` endpoints) are
@@ -256,10 +257,19 @@ impl Model for Signal {
         if e.iter().all(|&l| l == 0) {
             self.emitters.remove(&at);
         }
+        // Settled now, not next tick: a signal crosses its network the tick
+        // it's emitted (as redstone dust does), and what reads the level
+        // this tick sees it.
         let mut feeds = Vec::new();
         Self::feeds(cx.layer, at, &mut feeds);
+        let mut nets: Vec<NetId> = Vec::with_capacity(feeds.len());
         for (_, net) in feeds {
-            self.dirty(net);
+            if !nets.contains(&net) {
+                nets.push(net);
+            }
+        }
+        for net in nets {
+            self.recompute(cx, net);
         }
     }
 
