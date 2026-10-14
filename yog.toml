@@ -1,7 +1,7 @@
 [mod]
 id          = "yog-pipes"
 name        = "@Strings.mod_name"
-version     = "0.5.0"
+version     = "0.5.1"
 description = "@Strings.mod_description"
 authors     = ["Yog Team"]
 license     = "AGPL-3.0-only"
