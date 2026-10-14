@@ -159,7 +159,8 @@ pub enum Mechanic {
     Flow,
     /// Levels per channel, strongest emitter wins, minus `attenuation` per
     /// block (redstone, bundled cables).
-    Signal { channels: u8, attenuation: u8 },
+    /// `channels`: 1–256.
+    Signal { channels: u16, attenuation: u8 },
     /// Implemented by another mod: `handler` is called with an
     /// [`ExternalCall`] per network tick; `params` are the attach params
     /// it reads.

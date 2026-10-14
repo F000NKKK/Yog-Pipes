@@ -30,7 +30,7 @@ struct Net {
 }
 
 pub struct Signal {
-    channels: u8,
+    channels: u16,
     attenuation: u8,
     emitters: FxHashMap<Pos, Vec<u8>>,
     nets: NetMap<Net>,
@@ -39,9 +39,9 @@ pub struct Signal {
 }
 
 impl Signal {
-    pub fn new(channels: u8, attenuation: u8) -> Self {
+    pub fn new(channels: u16, attenuation: u8) -> Self {
         Signal {
-            channels: channels.clamp(1, 64),
+            channels: channels.clamp(1, 256),
             attenuation,
             emitters: FxHashMap::default(),
             nets: NetMap::default(),
@@ -160,7 +160,7 @@ impl Signal {
                 continue;
             }
             let at = cx.layer.endpoint(p.ep).pos;
-            for c in 0..self.channels {
+            for c in (0..self.channels).map(|c| c as u8) {
                 let lvl = self.node_level(cx.layer, p.node, c);
                 let told = self.told.get(&(at, c)).copied().unwrap_or(0);
                 if lvl != told {
@@ -242,7 +242,7 @@ impl Model for Signal {
     }
 
     fn emit(&mut self, cx: &mut Cx, at: Pos, channel: u8, level: u8) {
-        if channel >= self.channels {
+        if channel as u16 >= self.channels {
             return;
         }
         let level = level.min(MAX_LEVEL);
@@ -277,7 +277,7 @@ impl Model for Signal {
         if !self.emitters.contains_key(&at) {
             return;
         }
-        for c in 0..self.channels {
+        for c in (0..self.channels).map(|c| c as u8) {
             self.emit(cx, at, c, 0);
         }
     }

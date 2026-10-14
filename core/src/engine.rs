@@ -54,7 +54,7 @@ pub enum ModelSpec {
     InFlight,
     Flow,
     Signal {
-        channels: u8,
+        channels: u16,
         attenuation: u8,
     },
     External {
