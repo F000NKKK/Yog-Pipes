@@ -1,6 +1,7 @@
 {
   "name": "@Strings.copper_pipe",
   "tooltip": "@Strings.copper_pipe.desc",
+  "tags": ["pipes"],
   "block": {
     "hardness": 1.5,
     "resistance": 3,
