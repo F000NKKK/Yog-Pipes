@@ -21,7 +21,7 @@ code, so we can agree on the approach first.
 
 ## Making a change
 
-1. Fork the repository and create a branch from `master`.
+1. Fork the repository and create a branch from `main`.
 2. Make the change, with tests where it makes sense.
 3. Check that everything builds and the tests pass:
 
