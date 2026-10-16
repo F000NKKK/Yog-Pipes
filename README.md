@@ -52,7 +52,7 @@ This writes it into your `yog.toml`:
 
 ```toml
 [dependencies.exports]
-yog-pipes = "0.4"
+yog-pipes = "0.8"
 ```
 
 A pipe is ordinary content: declare the block in a `.yblock` (model,
@@ -75,18 +75,29 @@ library while the code itself runs inside the Yog Pipes mod at runtime:
 
 ```rust
 use crate::content::Blocks;
-use yog_pipes::{register_pipe, PipeDef, PipeKind};
+use yog_pipes::{attach, register_capability, AttachDef, CapabilityDef, Distribution, Mechanic};
 
+// What the pipe carries: items travelling block by block.
+register_capability(CapabilityDef {
+    name: "mymod:items".into(),
+    kinds: Vec::new(),
+    exclusive: true,
+    state_prefix: "items".into(),
+    indicators: Vec::new(),
+    distribution: Distribution::RoundRobin,
+    events: None,
+    mechanic: Mechanic::InFlight,
+}).unwrap();
 let pipe = Blocks::copper_pipe();
-register_pipe(PipeDef {
-    block_id: pipe.id,
-    kind: PipeKind::Item,
-    link_groups: pipe.connect_groups, // the same groups the arms connect by
-    properties: [("speed".into(), 2.0)].into(),
+attach(AttachDef {
+    block: pipe.id,
+    capability: "mymod:items".into(),
+    groups: pipe.connect_groups, // the same groups the arms connect by
+    params: [("speed".into(), 0.5)].into(),
 }).unwrap();
 ```
 
-Recipes are your mod's own (`registry.add_shaped_recipe(...)`). Players need
+Recipes are your mod's own content (`content/recipes/*.yrecipe`). Players need
 both `.yog` files in `yog-mods/`: yours and Yog Pipes.
 [`examples/copper-pipes/`](examples/copper-pipes) is a complete mod with one
 pipe.

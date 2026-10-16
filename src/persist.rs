@@ -20,7 +20,7 @@
 //! It's written on server stop and every [`AUTOSAVE_TICKS`] in between if
 //! anything changed.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -47,7 +47,7 @@ struct Target {
     endpoints: Vec<u8>,
 }
 
-/// `None` while no world is open or its directory couldn't be found.
+/// `None` while no world is open.
 static TARGET: Mutex<Option<Target>> = Mutex::new(None);
 static TICKS: AtomicU32 = AtomicU32::new(0);
 
@@ -76,11 +76,7 @@ fn decode_endpoints(bytes: &[u8]) -> Result<Vec<EndpointDef>, String> {
 /// Load the world's state into `host` (called on server start).
 pub fn load(host: &mut Host, srv: &dyn yog_api::Server) {
     TICKS.store(0, Ordering::Relaxed);
-    let Some(dir) = find_world_dir(Path::new(&srv.game_dir())) else {
-        yog_api::warn!("[yog-pipes] world directory not found; pipe state won't be saved");
-        *lock(&TARGET) = None;
-        return;
-    };
+    let dir = PathBuf::from(srv.world_dir());
     let mut store = yog_api::Storage::open(&dir.to_string_lossy(), MOD_ID);
     let engine = store.get_bytes(ENGINE_KEY).map(<[u8]>::to_vec);
     let endpoints = store.get_bytes(ENDPOINTS_KEY).map(<[u8]>::to_vec);
@@ -160,42 +156,4 @@ pub fn tick(host: &Host) {
 pub fn unload(host: &Host) {
     save(host);
     *lock(&TARGET) = None;
-}
-
-/// The save directory of the world being played: the one under `game_dir`
-/// (or `game_dir/saves`) with the newest `session.lock`.
-pub fn find_world_dir(game_dir: &Path) -> Option<PathBuf> {
-    [game_dir.join("saves"), game_dir.to_path_buf()]
-        .iter()
-        .filter_map(|parent| std::fs::read_dir(parent).ok())
-        .flatten()
-        .flatten()
-        .filter_map(|entry| {
-            let dir = entry.path();
-            let modified = std::fs::metadata(dir.join("session.lock"))
-                .and_then(|m| m.modified())
-                .ok()?;
-            Some((modified, dir))
-        })
-        .max_by_key(|(modified, _)| *modified)
-        .map(|(_, dir)| dir)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn world_dir_is_newest_session_lock() {
-        let root = std::env::temp_dir().join(format!("yog-pipes-test-{}", std::process::id()));
-        let saves = root.join("saves");
-        for (name, delay) in [("old", 0), ("new", 20)] {
-            std::thread::sleep(std::time::Duration::from_millis(delay));
-            let d = saves.join(name);
-            std::fs::create_dir_all(&d).unwrap();
-            std::fs::write(d.join("session.lock"), b"x").unwrap();
-        }
-        assert_eq!(find_world_dir(&root), Some(saves.join("new")));
-        std::fs::remove_dir_all(&root).ok();
-    }
 }

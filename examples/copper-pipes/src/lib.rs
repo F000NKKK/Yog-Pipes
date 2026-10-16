@@ -1,31 +1,42 @@
-//! A minimal mod built on Yog Pipes. The pipe block itself is declared in
-//! `content/blocks/copper_pipe.yblock`; this only tells Yog Pipes that it is
-//! a pipe and adds its recipe.
+//! A minimal mod built on Yog Pipes. The pipe block and its recipe are
+//! content (`content/`); this only tells Yog Pipes that it is a pipe.
 
-use yog_api::{warn, Mod, Registry, ShapedRecipe};
-use yog_pipes::{register_pipe, PipeDef, PipeKind};
+use yog_api::{warn, Mod, Registry};
+use yog_pipes::{attach, register_capability, AttachDef, CapabilityDef, Distribution, Mechanic};
 
 use crate::content::Blocks;
+
+/// The capability the copper pipe carries.
+const ITEMS: &str = "copper-pipes:items";
+/// Blocks an item travels a tick.
+const SPEED: f64 = 0.5;
 
 pub struct CopperPipes;
 
 impl Mod for CopperPipes {
-    fn register(registry: &mut Registry) {
+    fn register(_registry: &mut Registry) {
         let pipe = Blocks::copper_pipe();
-        if let Err(e) = register_pipe(PipeDef {
-            block_id: pipe.id,
-            kind: PipeKind::Item,
-            link_groups: pipe.connect_groups,
-            properties: [("speed".into(), 2.0)].into(),
-        }) {
+        // What the pipe carries: items travelling block by block.
+        let carried = CapabilityDef {
+            name: ITEMS.into(),
+            kinds: Vec::new(),
+            exclusive: true,
+            state_prefix: "items".into(),
+            indicators: Vec::new(),
+            distribution: Distribution::RoundRobin,
+            events: None,
+            mechanic: Mechanic::InFlight,
+        };
+        let pipe = AttachDef {
+            block: pipe.id,
+            capability: ITEMS.into(),
+            // The same groups its arms connect by.
+            groups: pipe.connect_groups,
+            params: [("speed".into(), SPEED)].into(),
+        };
+        if let Err(e) = register_capability(carried).and_then(|()| attach(pipe)) {
             warn!("[copper-pipes] {e}");
         }
-
-        registry.add_shaped_recipe(
-            ShapedRecipe::new("copper-pipes:copper_pipe", Blocks::COPPER_PIPE, 8)
-                .row("CCC")
-                .key('C', "minecraft:copper_ingot"),
-        );
     }
 }
 

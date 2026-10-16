@@ -1,7 +1,7 @@
 # A minimal mod built on Yog Pipes: one copper item pipe. The block is
 # content (content/blocks/copper_pipe.yblock), its texts are resources
-# (resources/Strings.yres); src/lib.rs only marks it as a pipe and adds
-# its recipe.
+# (resources/Strings.yres), its recipe too (content/recipes); src/lib.rs
+# only marks it as a pipe.
 [mod]
 id          = "copper-pipes"
 name        = "@Strings.mod_name"
@@ -11,7 +11,7 @@ authors     = ["Yog Team"]
 license     = "MIT"
 
 [dependencies]
-yog-api = "0.94.1"
+yog-api = "0.96"
 
 [dependencies.exports]
-yog-pipes = "0.4"
+yog-pipes = "0.8"
