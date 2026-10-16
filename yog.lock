@@ -577,7 +577,7 @@ checksum = "215ba20e765c76a547b990ed49948a7ba19024e9f4506542b7fb4e7ec7f11c00"
 
 [[package]]
 name = "yog-pipes"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "rkyv",
  "yog-api",
