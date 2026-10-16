@@ -11,7 +11,7 @@ authors     = ["Yog Team"]
 license     = "MIT"
 
 [dependencies]
-yog-api = "0.96"
+yog-api = "0.97"
 
 [dependencies.exports]
-yog-pipes = "0.8"
+yog-pipes = "0.9"
