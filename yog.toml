@@ -93,15 +93,3 @@ env        = [
     "__VK_LAYER_NV_optimus=NVIDIA_only",
 ]
 
-[run."neoforge-1.20.1"]
-name       = "NeoForge 1.20.1"
-export_dir = "../Yog-Mod-Loader/neoforge/run/yog-mods"
-command    = "./gradlew"
-args       = ["runClient", "-Pminecraft_version=1.20.1"]
-cwd        = "../Yog-Mod-Loader/neoforge"
-env        = [
-    "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64",
-    "__NV_PRIME_RENDER_OFFLOAD=1",
-    "__GLX_VENDOR_LIBRARY_NAME=nvidia",
-    "__VK_LAYER_NV_optimus=NVIDIA_only",
-]
