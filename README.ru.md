@@ -193,7 +193,7 @@ interop), `persist.rs` (сохранение), `payload.rs`, `kind.rs`; назв
 
 ```bash
 yog build                  # -> artifacts/yog-pipes.yog
-yog run fabric-1.21.1      # dev-игра; нужен Yog-Mod-Loader рядом с этим репозиторием
+yog run fabric 1.21.1      # dev-игра из SDK загрузчика (Yog Installer или ~/.yog/local.toml)
 yog publish exports        # опубликовать yog_pipes_exports на crates.io
 ```
 
