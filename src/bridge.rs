@@ -202,7 +202,7 @@ pub fn filter(reg: &mut Registry, f: &FilterDef) -> Result<Filter, String> {
                     .id(k)
                     .ok_or_else(|| format!("unknown kind `{k}`"))?,
             ),
-            FilterRule::Colour(c) => FilterEntry::Colour(*c),
+            FilterRule::Color(c) => FilterEntry::Color(*c),
         });
     }
     Ok(Filter {
@@ -225,7 +225,7 @@ pub fn filter_def(reg: &Registry, f: &Filter) -> FilterDef {
                 FilterEntry::Resource(r) => FilterRule::Resource(resource(reg, *r)),
                 FilterEntry::Id(id) => FilterRule::Id(id.to_string()),
                 FilterEntry::Kind(k) => FilterRule::Kind(reg.kinds.get(*k).name.clone()),
-                FilterEntry::Colour(c) => FilterRule::Colour(*c),
+                FilterEntry::Color(c) => FilterRule::Color(*c),
             })
             .collect(),
     }

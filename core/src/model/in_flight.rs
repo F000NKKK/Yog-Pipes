@@ -45,7 +45,7 @@ pub struct Unit {
     pub dest: Option<(NodeId, Face)>,
     /// Where it came from (positions survive saves).
     pub source: (Pos, Face),
-    pub colour: u8,
+    pub color: u8,
     pub returning: bool,
     pub wait_until: u64,
 }
@@ -55,7 +55,7 @@ struct Seek {
     from: NodeId,
     res: ResId,
     amount: u64,
-    colour: u8,
+    color: u8,
     /// Endpoint position not to pick (the unit's source).
     except: Option<Pos>,
     rr: usize,
@@ -107,7 +107,7 @@ impl InFlight {
             from,
             res,
             amount,
-            colour,
+            color,
             except,
             rr,
         } = q;
@@ -133,7 +133,7 @@ impl InFlight {
         );
         for k in 0..self.cands.len() {
             let p = self.ports[self.cands[k]];
-            let acc = cx.insert(p, res, amount, colour, true);
+            let acc = cx.insert(p, res, amount, color, true);
             if acc > 0 {
                 return Some((p, acc));
             }
@@ -155,7 +155,7 @@ impl InFlight {
             let put = if u.returning {
                 cx.give_back(port, u.res, u.amount)
             } else {
-                cx.insert(port, u.res, u.amount, u.colour, false)
+                cx.insert(port, u.res, u.amount, u.color, false)
             };
             u.amount -= put;
             if u.amount == 0 {
@@ -176,7 +176,7 @@ impl InFlight {
                     from: u.node,
                     res: u.res,
                     amount: u.amount,
-                    colour: u.colour,
+                    color: u.color,
                     except: None,
                     rr,
                 },
@@ -286,7 +286,7 @@ impl Model for InFlight {
                 let Some((res, n)) = cx.extract(src, Want::Any, stack, true) else {
                     continue;
                 };
-                let colour = cx.layer.side(src.node, src.face).colour;
+                let color = cx.layer.side(src.node, src.face).color;
                 let src_pos = cx.layer.endpoint(src.ep).pos;
                 let Some((dest, acc)) = self.target(
                     cx,
@@ -295,7 +295,7 @@ impl Model for InFlight {
                         from: src.node,
                         res,
                         amount: n,
-                        colour,
+                        color,
                         except: Some(src_pos),
                         rr: st.rr,
                     },
@@ -312,7 +312,7 @@ impl Model for InFlight {
                     progress: 0,
                     dest: Some((dest.node, dest.face)),
                     source: (src_pos, src.face.opposite()),
-                    colour,
+                    color,
                     returning: false,
                     wait_until: 0,
                 });
@@ -380,7 +380,7 @@ impl Model for InFlight {
                 e.res(reg, u.res)
                     .u64(u.amount)
                     .u32(u.progress)
-                    .u8(u.colour)
+                    .u8(u.color)
                     .u8(u.returning as u8);
                 e.pos(reg, u.source.0).face(u.source.1);
                 match u.dest {
@@ -399,7 +399,7 @@ impl Model for InFlight {
         let mut d = Dec::new(bytes);
         let mut read = || -> Option<Unit> {
             let res = d.res(cx.reg)?;
-            let (amount, progress, colour, returning) = (d.u64()?, d.u32()?, d.u8()?, d.u8()? != 0);
+            let (amount, progress, color, returning) = (d.u64()?, d.u32()?, d.u8()?, d.u8()? != 0);
             let source = (d.pos(cx.reg)?, d.face()?);
             let dest = match d.u8()? {
                 1 => {
@@ -416,7 +416,7 @@ impl Model for InFlight {
                 progress,
                 dest,
                 source,
-                colour,
+                color,
                 returning,
                 wait_until: 0,
             })

@@ -150,8 +150,8 @@ pub enum FilterEntry {
     Id(Box<str>),
     /// Any resource of this kind.
     Kind(KindId),
-    /// Units tagged with this colour (in-flight sorting).
-    Colour(u8),
+    /// Units tagged with this color (in-flight sorting).
+    Color(u8),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -161,14 +161,14 @@ pub struct Filter {
 }
 
 impl Filter {
-    /// Whether a portion of `res` (tagged `colour`, 0 = none) passes.
-    pub fn passes(&self, resources: &Resources, res: ResId, colour: u8) -> bool {
+    /// Whether a portion of `res` (tagged `color`, 0 = none) passes.
+    pub fn passes(&self, resources: &Resources, res: ResId, color: u8) -> bool {
         let key = resources.get(res);
         let hit = self.entries.iter().any(|e| match e {
             FilterEntry::Resource(r) => *r == res,
             FilterEntry::Id(id) => *key.id == **id,
             FilterEntry::Kind(k) => key.kind == *k,
-            FilterEntry::Colour(c) => *c == colour,
+            FilterEntry::Color(c) => *c == color,
         });
         match self.mode {
             FilterMode::Allow => hit,
@@ -196,8 +196,8 @@ impl Filters {
     }
 
     /// `true` when there is no filter.
-    pub fn passes(&self, id: Option<FilterId>, res: &Resources, r: ResId, colour: u8) -> bool {
-        id.is_none_or(|f| self.get(f).passes(res, r, colour))
+    pub fn passes(&self, id: Option<FilterId>, res: &Resources, r: ResId, color: u8) -> bool {
+        id.is_none_or(|f| self.get(f).passes(res, r, color))
     }
 }
 
@@ -255,8 +255,8 @@ pub struct Side {
     /// Added to the endpoint's own priority.
     pub priority: i32,
     pub filter: Option<FilterId>,
-    /// Colour tag given to units extracted through this side.
-    pub colour: u8,
+    /// Color tag given to units extracted through this side.
+    pub color: u8,
 }
 
 // ── Block and endpoint types ─────────────────────────────────────────────────

@@ -29,7 +29,7 @@ hand-write only real logic; no hand-written rendering.
 | # | Decision |
 |---|---|
 | T1 | **One abstract pipe.** A pipe is any block with at least one *capability* attached. There is no pipe kind; `PipeKind` and `PipeDef` are deleted. |
-| T2 | **Capabilities compose.** Any number of mods attach capabilities to the same block id without knowing each other. Each capability has its **own layer**: its own link groups, side modes, colours, networks and model state. A combined cable is simply a block in several layers. |
+| T2 | **Capabilities compose.** Any number of mods attach capabilities to the same block id without knowing each other. Each capability has its **own layer**: its own link groups, side modes, colors, networks and model state. A combined cable is simply a block in several layers. |
 | T3 | **Transport models are a Rust trait** (`yog_pipes_core::Model`). Built-in models implement exactly that trait; a mod-defined model gets the same hooks through the `External` adapter (§5.7). Models are named by *mechanic* (buffered, routed, in-flight, flow, signal), never by resource. |
 | T4 | **Resources are typed by an open kind registry.** `register_kind("ns:id", KindDef)` (discrete/continuous, merge rule, conversions, unit label). Capabilities declare the kinds they carry; endpoints declare the kinds they take/give; mismatches are refused at registration, and a mismatching resource offered at run time is refused *and logged*, never silently moved. |
 | T5 | **Conservation is enforced by the engine, not trusted to callers.** Every unit that leaves an endpoint is accounted for: in a buffer, in flight, in a segment, in another endpoint, or reported as *spilled/lost* through the capability's event hook. Amounts are `u64` integers so the books balance exactly. |
@@ -57,16 +57,16 @@ hand-write only real logic; no hand-written rendering.
 | **Create** fluids | pipes | fluid per segment, **pumps create pressure**, propagates, reach limited by pump | flow direction, open ends spill | `flow` with pump potentials |
 | **BuildCraft** item pipes | pipes | **items physically in flight** at pipe speed | extraction by engine/wooden pipe, gates, diamond-pipe filters, items bounce back | `in_flight` + filters + per-side modes |
 | **BuildCraft** fluid pipes | pipes | fluid per segment with direction & capacity | flow only to lower pressure, per-segment capacity | `flow` |
-| **Mekanism** logistical transporter | pipes | items in flight, **colour-sorted**, returning / stuck items | items return to source if dest gone; idle items wait | `in_flight` (colour filter, return, stuck retry) |
+| **Mekanism** logistical transporter | pipes | items in flight, **color-sorted**, returning / stuck items | items return to source if dest gone; idle items wait | `in_flight` (color filter, return, stuck retry) |
 | **Thermal** itemducts | pipes | in flight, servos/filters | round-robin/nearest | `in_flight` + policy |
 | **Pipez / EnderIO** conduits | network | **instant** routing per tick | round-robin / nearest / random, priority, filters, extract/insert/disabled per side, redstone control | `routed` |
 | **AE2 / Refined Storage** | network | instant network storage access | no in-flight items | `routed` (instant) + messaging for queries |
 | **Vanilla redstone** | wire | signal level | −1 per block, max 15 | `signal` with `attenuation = 1` |
-| **Project Red** bundled cables | cable | 16 coloured channels | per-channel levels, insulated wires = one colour | `signal` with 16 channels + colour |
+| **Project Red** bundled cables | cable | 16 colored channels | per-channel levels, insulated wires = one color | `signal` with 16 channels + color |
 | **EnderIO / AE2** channels, wireless frequencies | network/global | signals, data | channels, frequencies | `signal` channels; wireless = `External` or a mod grouping endpoints |
 
 Cross-cutting requirements every model must honour: per-side connection modes
-(`in`/`out`/`both`/`off`), filters, priorities, colours/channels, redstone-style enable,
+(`in`/`out`/`both`/`off`), filters, priorities, colors/channels, redstone-style enable,
 tiers changing speed/capacity, chunks unloading under a network, multiple dimensions, client
 display sync.
 
@@ -96,7 +96,7 @@ flowchart TB
 ```
 
 1. **Core topology** (`core/src/layer.rs`): per capability one `Layer` — node slab, position
-   index, networks with ids, incremental union/split, side config, colours, chunk index.
+   index, networks with ids, incremental union/split, side config, colors, chunk index.
 2. **Models** (`core/src/model/*.rs`): the `Model` trait and the built-ins.
 3. **Policies** (`core/src/policy.rs`): distribution orders and filters, shared by every model
    that chooses destinations.
@@ -118,7 +118,7 @@ Yog-Pipes defines **no** resource, kind, capability or pipe. Everything a "Yog P
 | define an abstract capability others attach to their blocks (`ns:power`) | `register_capability` with any built-in model or `External` |
 | ship a model the core doesn't have | `ModelSpec::External` + `#[yog_export]` hooks, with `endpoint_insert`/`endpoint_extract`/`network_view` for I/O (§5.7) |
 | let machines plug in | `register_endpoint` (by block id or by position) |
-| configure sides, colours, enable/disable | `set_side`, `set_colour` |
+| configure sides, colors, enable/disable | `set_side`, `set_color` |
 | drive indication | indicators in `CapabilityDef` (+ `IndicatorSource::External` for external models) |
 | react to burns, overloads, spills | `CapabilityDef.on_event` |
 | inspect networks (tooltips, probes, debug) | `network_info`, `node_info`, `indication` |
@@ -142,8 +142,8 @@ block "mymod:universal_cable"
   unknown keys are refused at attach time (each model publishes its parameter names), so a typo
   can't silently do nothing.
 - Each capability has its own **layer**. Two adjacent blocks link in layer *C* iff both carry
-  *C*, their *C* link groups intersect, neither side is `off` in *C*, and their *C* colours are
-  compatible (`0` = uncoloured links to anything, otherwise equal). So one block can be in an
+  *C*, their *C* link groups intersect, neither side is `off` in *C*, and their *C* colors are
+  compatible (`0` = uncolored links to anything, otherwise equal). So one block can be in an
   energy network spanning a whole base and in a signal network of three blocks.
 - A capability may declare `exclusive: true` — no other exclusive capability may then be attached
   to the same block (for models that assume they own the block, e.g. two `flow` capabilities
@@ -198,11 +198,11 @@ logging it once — a buggy handler can lose its own units but never create them
 ### 3.3 Side configuration
 
 Per (layer, node, face): `SideConfig { mode: In|Out|Both|Off, enabled, priority, filter,
-colour }`. Faces towards pipes: `Off` cuts the link (wrench). Faces towards endpoints: `In` = the
+color }`. Faces towards pipes: `Off` cuts the link (wrench). Faces towards endpoints: `In` = the
 network only inserts there, `Out` = only extracts, `Both`, `Off` = not connected; `enabled =
 false` is redstone control (the mod flips it from its own redstone logic). `filter` is an
-allow/deny list of resource ids/kinds/data (§6). Colour on a node (`set_colour`) partitions
-networks (Mekanism transporter colours, Project Red insulated wires).
+allow/deny list of resource ids/kinds/data (§6). Color on a node (`set_color`) partitions
+networks (Mekanism transporter colors, Project Red insulated wires).
 
 ---
 
@@ -212,7 +212,7 @@ networks (Mekanism transporter colours, Project Red insulated wires).
 
 ```rust
 pub struct Pos { pub dim: DimId, pub x: i32, pub y: i32, pub z: i32 }   // 16 B, Copy, FxHash
-struct Node { pos: Pos, block: BlockTypeId, links: [NodeId; 6], net: NetId, colour: u8,
+struct Node { pos: Pos, block: BlockTypeId, links: [NodeId; 6], net: NetId, color: u8,
               sides: [SideConfig; 6] /* small, default = Both */, mark: u32 }
 pub struct Layer { nodes: Vec<Node>, free: Vec<u32>, index: FxHashMap<Pos, NodeId>,
                    nets: Slab<Network>, chunks: FxHashMap<ChunkKey, Vec<NodeId>>, ... }
@@ -357,7 +357,7 @@ BuildCraft, Mekanism logistical transporters, Thermal itemducts — for any disc
 - Network change under a unit: if its destination is no longer in its network it re-targets /
   returns; when the pipe it is in is broken it is `spilled` (the capability's event hook decides:
   drop an item entity, void, …).
-- Colour: a unit inherits the source side's colour; filters can match on it (sorting).
+- Color: a unit inherits the source side's color; filters can match on it (sorting).
 - Indicator: `units` per node = number of units in that node (clamped to the indicator's levels).
 - Saved: one record per unit at its node.
 
@@ -423,7 +423,7 @@ world tick for tests). Composable as "order + tie-break": `Priority` always tie-
 chosen secondary order.
 
 `Filter`: `{ mode: Allow|Deny, entries: [ById(res id) | ByKind(kind) | ByData(bytes) |
-ByColour(u8)] }` stored once and referenced by `FilterId`; set on a side. A filter is evaluated
+ByColor(u8)] }` stored once and referenced by `FilterId`; set on a side. A filter is evaluated
 on interned ids (integer compares).
 
 Models that choose destinations (`buffered`, `routed`, `in_flight`, `flow` sources/sinks) all use
@@ -443,7 +443,7 @@ overwritten), `latest(pos)` (the network's last broadcast — the 0.4 `read` "le
 
 ## 8. Persistence
 
-The engine saves `Vec<Record { layer, pos, bytes }>` from every model plus side configs, colours,
+The engine saves `Vec<Record { layer, pos, bytes }>` from every model plus side configs, colors,
 filters, positional endpoints and inboxes, in a versioned explicit binary format (as 0.4). On load
 records are parked by position; when the node at that position is (re)discovered the model's
 `restore` gets the bytes. Representative-position records (buffers) whose pipe vanished while the
@@ -493,7 +493,7 @@ instant routing with priorities/filters/side modes/redstone enable (Pipez, Ender
 packets with distance loss and packet limits with burn/explode events (IC2, IE); items/units in
 flight with speed, sorting, return and stuck handling (BuildCraft, Mekanism, Thermal); per-segment
 fluids with pumps/pressure (BuildCraft, Create fluids); levels on channels with attenuation and
-colours (redstone, Project Red, EnderIO); raw payload messaging; combined pipes.
+colors (redstone, Project Red, EnderIO); raw payload messaging; combined pipes.
 
 **Expressible via `External`, not built in:** Create stress (constraint network), AE2 channel
 counting, IE long wires (links between distant connectors — a model can treat its connectors as

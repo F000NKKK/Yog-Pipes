@@ -95,7 +95,7 @@ impl Model for Routed {
             let Some((res, offered)) = cx.extract(src, Want::Any, rate, true) else {
                 continue;
             };
-            let colour = cx.layer.side(src.node, src.face).colour;
+            let color = cx.layer.side(src.node, src.face).color;
             self.dist.clear();
             self.dist
                 .extend_from_slice(cx.layer.port_distances(src.node));
@@ -123,7 +123,7 @@ impl Model for Routed {
                 for &i in &self.cands {
                     let loss = loss_for(self.dist[i], milli);
                     let cap = if offered > loss {
-                        cx.insert(self.ports[i], res, offered - loss, colour, true)
+                        cx.insert(self.ports[i], res, offered - loss, color, true)
                             .saturating_add(loss)
                     } else {
                         0
@@ -144,7 +144,7 @@ impl Model for Routed {
                     if left <= loss {
                         continue;
                     }
-                    let acc = cx.insert(self.ports[i], res, left - loss, colour, true);
+                    let acc = cx.insert(self.ports[i], res, left - loss, color, true);
                     if acc > 0 {
                         self.plan.push((i, acc, loss));
                         left -= acc + loss;
@@ -169,7 +169,7 @@ impl Model for Routed {
                 }
                 let port = self.ports[i];
                 let give = acc.min(left - loss);
-                let put = cx.insert(port, res, give, colour, false);
+                let put = cx.insert(port, res, give, color, false);
                 if put == 0 {
                     continue;
                 }
@@ -203,7 +203,7 @@ impl Model for Routed {
                     if left <= loss {
                         continue;
                     }
-                    let put = cx.insert(self.ports[i], res, left - loss, colour, false);
+                    let put = cx.insert(self.ports[i], res, left - loss, color, false);
                     if put > 0 {
                         left -= put + loss;
                         if loss > 0 {

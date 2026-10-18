@@ -228,7 +228,7 @@ pub(crate) fn set_side(
             disabled: side.disabled,
             priority: side.priority,
             filter,
-            colour: side.colour,
+            color: side.color,
         };
         host.run(None, |e, io, probe| {
             e.set_side(io, probe, cap, p, bridge::core_face(face), side)
@@ -237,13 +237,13 @@ pub(crate) fn set_side(
     Ok(())
 }
 
-pub(crate) fn set_colour(capability: String, pos: PipePos, colour: u8) -> Result<(), String> {
+pub(crate) fn set_color(capability: String, pos: PipePos, color: u8) -> Result<(), String> {
     host::mutate(move |host| {
         let Ok(cap) = cap_id(host, &capability) else {
             return;
         };
         let p = bridge::pos(&mut host.engine.reg, &pos);
-        host.run(None, |e, io, probe| e.set_colour(io, probe, cap, p, colour));
+        host.run(None, |e, io, probe| e.set_color(io, probe, cap, p, color));
     });
     Ok(())
 }
@@ -404,7 +404,7 @@ pub(crate) fn pipe_info(pos: PipePos) -> Result<Vec<PipeInfo>, String> {
             out.push(PipeInfo {
                 capability: cap.name.clone(),
                 network: layer.net_of(node).map_or(0, network_id),
-                colour: n.colour,
+                color: n.color,
                 faces,
             });
         }

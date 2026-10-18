@@ -125,8 +125,8 @@ pub enum FilterRule {
     Id(String),
     /// Any resource of this kind.
     Kind(String),
-    /// Units tagged with this colour (in-flight sorting).
-    Colour(u8),
+    /// Units tagged with this color (in-flight sorting).
+    Color(u8),
 }
 
 /// Passes what matches a rule (`deny = false`) or what matches none.
@@ -302,8 +302,8 @@ pub struct SideDef {
     pub disabled: bool,
     pub priority: i32,
     pub filter: Option<FilterDef>,
-    /// Colour tag of units leaving here; colour filters match it.
-    pub colour: u8,
+    /// Color tag of units leaving here; color filters match it.
+    pub color: u8,
 }
 
 /// What an extraction asks for.
@@ -541,6 +541,6 @@ pub struct FaceInfo {
 pub struct PipeInfo {
     pub capability: String,
     pub network: u64,
-    pub colour: u8,
+    pub color: u8,
     pub faces: Vec<FaceInfo>,
 }

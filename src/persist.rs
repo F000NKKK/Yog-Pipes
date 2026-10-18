@@ -1,7 +1,7 @@
 //! Saving transport state with the world.
 //!
 //! What is saved: the engine's state (`Engine::save` — what every network
-//! holds, in-flight units, side configuration, colours, signal emitters,
+//! holds, in-flight units, side configuration, colors, signal emitters,
 //! inboxes, by position and by name) and the positional endpoints mods
 //! registered (by name, with their handler names). The topology is not:
 //! it's rediscovered from the world, starting at saved positions.

@@ -34,8 +34,8 @@ pub struct Node {
     pub pos: Pos,
     /// Index into the layer's attach table.
     pub att: u16,
-    /// Colour partition: 0 links to anything, otherwise only to 0 or equal.
-    pub colour: u8,
+    /// Color partition: 0 links to anything, otherwise only to 0 or equal.
+    pub color: u8,
     pub links: [NodeId; 6],
     net: u32,
     mark: u32,
@@ -241,7 +241,7 @@ impl Layer {
     pub fn linkable(&self, a: NodeId, face: Face, b: NodeId) -> bool {
         let (na, nb) = (self.node(a), self.node(b));
         self.compat[na.att as usize][nb.att as usize]
-            && (na.colour == 0 || nb.colour == 0 || na.colour == nb.colour)
+            && (na.color == 0 || nb.color == 0 || na.color == nb.color)
             && self.side(a, face).mode != SideMode::Off
             && self.side(b, face.opposite()).mode != SideMode::Off
     }
@@ -251,7 +251,7 @@ impl Layer {
         let node = Node {
             pos,
             att,
-            colour: 0,
+            color: 0,
             links: [NO_NODE; 6],
             net: NO_NET,
             mark: 0,
@@ -619,7 +619,7 @@ impl Layer {
         }
     }
 
-    /// Cut the link on `a`'s `face` (side set to off, colour change).
+    /// Cut the link on `a`'s `face` (side set to off, color change).
     pub fn unlink(&mut self, a: NodeId, face: Face) -> Split {
         let b = self.nodes[a.index()].links[face as usize];
         if b == NO_NODE {
@@ -892,7 +892,7 @@ impl Layer {
         nets
     }
 
-    // ── Side configuration and colour ────────────────────────────────────
+    // ── Side configuration and color ────────────────────────────────────
 
     pub fn set_side_raw(&mut self, node: NodeId, face: Face, side: Side) {
         if side == Side::default() {
@@ -905,8 +905,8 @@ impl Layer {
         }
     }
 
-    pub fn set_colour_raw(&mut self, node: NodeId, colour: u8) {
-        self.nodes[node.index()].colour = colour;
+    pub fn set_color_raw(&mut self, node: NodeId, color: u8) {
+        self.nodes[node.index()].color = color;
     }
 
     /// Every side configured away from the default (for saving).

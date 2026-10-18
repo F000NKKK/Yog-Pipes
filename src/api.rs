@@ -58,11 +58,11 @@ pub fn set_side(
     crate::ops::set_side(capability, pos, face, side)
 }
 
-/// Colour the pipe at `pos` (0 = none): coloured pipes link only to the
-/// same colour or to uncoloured ones.
+/// Color the pipe at `pos` (0 = none): colored pipes link only to the
+/// same color or to uncolored ones.
 #[yog_export]
-pub fn set_colour(capability: String, pos: PipePos, colour: u8) -> Result<(), String> {
-    crate::ops::set_colour(capability, pos, colour)
+pub fn set_color(capability: String, pos: PipePos, color: u8) -> Result<(), String> {
+    crate::ops::set_color(capability, pos, color)
 }
 
 /// Re-read the block at `pos` from the world. Placing and breaking by

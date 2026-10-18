@@ -212,12 +212,12 @@ impl Cx<'_> {
     /// The resource-acceptance check of a port: side filter and the
     /// endpoint's kinds (directly or by conversion). Returns the kind
     /// conversion `(num, den)`.
-    fn accepts(&self, port: Port, res: ResId, colour: u8) -> Option<(u64, u64)> {
+    fn accepts(&self, port: Port, res: ResId, color: u8) -> Option<(u64, u64)> {
         let side = self.layer.side(port.node, port.face);
         if !self
             .reg
             .filters
-            .passes(side.filter, &self.reg.resources, res, colour)
+            .passes(side.filter, &self.reg.resources, res, color)
         {
             return None;
         }
@@ -232,7 +232,7 @@ impl Cx<'_> {
             .next()
     }
 
-    /// Offer `amount` of `res` (tagged `colour`) to a sink port. Returns
+    /// Offer `amount` of `res` (tagged `color`) to a sink port. Returns
     /// what it accepted, in the network's units. Never more than `amount`.
     ///
     /// With a kind conversion `num/den` only whole conversion steps are
@@ -244,13 +244,13 @@ impl Cx<'_> {
         port: Port,
         res: ResId,
         amount: u64,
-        colour: u8,
+        color: u8,
         simulate: bool,
     ) -> u64 {
         if amount == 0 || !self.sink(port) {
             return 0;
         }
-        let Some((num, den)) = self.accepts(port, res, colour) else {
+        let Some((num, den)) = self.accepts(port, res, color) else {
             return 0;
         };
         let call = self.call(port);
@@ -327,7 +327,7 @@ impl Cx<'_> {
         } && self
             .reg
             .filters
-            .passes(side.filter, &self.reg.resources, res, side.colour)
+            .passes(side.filter, &self.reg.resources, res, side.color)
             && self
                 .reg
                 .cap(self.cap)

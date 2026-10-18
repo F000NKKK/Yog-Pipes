@@ -93,7 +93,7 @@ fn networks_match_components_under_random_churn() {
 }
 
 #[test]
-fn link_groups_and_colours_partition() {
+fn link_groups_and_colors_partition() {
     let mut s = Sim::new();
     kinds(&mut s.e);
     let c = cap(
@@ -140,12 +140,12 @@ fn link_groups_and_colours_partition() {
         1,
         "an adapter bridges both groups"
     );
-    s.with_io(|e, io, probe| e.set_colour(io, probe, c, p(0, 0, 1), 3));
-    s.with_io(|e, io, probe| e.set_colour(io, probe, c, p(1, 0, 1), 4));
+    s.with_io(|e, io, probe| e.set_color(io, probe, c, p(0, 0, 1), 3));
+    s.with_io(|e, io, probe| e.set_color(io, probe, c, p(1, 0, 1), 4));
     assert_eq!(
         s.e.layer(c).nets().count(),
         2,
-        "different colours don't link"
+        "different colors don't link"
     );
 }
 

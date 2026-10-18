@@ -144,7 +144,7 @@ pub struct NetInfo {
 struct Parked {
     seeds: Vec<Pos>,
     sides: FxHashMap<Pos, Vec<(Face, Side)>>,
-    colours: FxHashMap<Pos, u8>,
+    colors: FxHashMap<Pos, u8>,
     records: FxHashMap<Pos, Vec<Vec<u8>>>,
     global: Option<Vec<u8>>,
     inbox: FxHashMap<Pos, VecDeque<Vec<u8>>>,
@@ -677,8 +677,8 @@ impl Engine {
                                 layer.set_side_raw(id, f, s);
                             }
                         }
-                        if let Some(col) = p.colours.remove(&pos) {
-                            layer.set_colour_raw(id, col);
+                        if let Some(col) = p.colors.remove(&pos) {
+                            layer.set_color_raw(id, col);
                         }
                     }
                     region[c].push(id);
@@ -854,21 +854,21 @@ impl Engine {
         }
     }
 
-    /// Set the colour of the `cap` node at `pos` (0 = uncoloured) and
+    /// Set the color of the `cap` node at `pos` (0 = uncolored) and
     /// re-evaluate its links.
-    pub fn set_colour(
+    pub fn set_color(
         &mut self,
         io: &mut dyn Io,
         probe: &mut dyn Probe,
         cap: CapId,
         pos: Pos,
-        colour: u8,
+        color: u8,
     ) {
         let c = cap.index();
         let Some(node) = self.slots[c].layer.node_at(pos) else {
             return;
         };
-        self.slots[c].layer.set_colour_raw(node, colour);
+        self.slots[c].layer.set_color_raw(node, color);
         for f in Face::ALL {
             self.relink(io, probe, c, node, f);
         }
@@ -1220,15 +1220,15 @@ impl Engine {
                 e.pos(reg, p);
             }
             let mut sides: Vec<(Pos, Face, Side)> = Vec::new();
-            let mut colours: Vec<(Pos, u8)> = Vec::new();
+            let mut colors: Vec<(Pos, u8)> = Vec::new();
             let mut records: Vec<Record> = Vec::new();
             if let Some(s) = slot {
                 sides.extend(s.layer.configured_sides());
-                colours.extend(
+                colors.extend(
                     s.layer
                         .nodes()
-                        .filter(|(_, n)| n.colour != 0)
-                        .map(|(_, n)| (n.pos, n.colour)),
+                        .filter(|(_, n)| n.color != 0)
+                        .map(|(_, n)| (n.pos, n.color)),
                 );
                 s.model.save(&s.layer, reg, &mut records);
             }
@@ -1236,7 +1236,7 @@ impl Engine {
                 for (pos, list) in &p.sides {
                     sides.extend(list.iter().map(|&(f, s)| (*pos, f, s)));
                 }
-                colours.extend(p.colours.iter().map(|(&p, &c)| (p, c)));
+                colors.extend(p.colors.iter().map(|(&p, &c)| (p, c)));
                 for (pos, list) in &p.records {
                     records.extend(list.iter().map(|b| Record {
                         pos: *pos,
@@ -1251,7 +1251,7 @@ impl Engine {
                     .u8(s.mode as u8)
                     .u8(s.disabled as u8)
                     .i32(s.priority)
-                    .u8(s.colour);
+                    .u8(s.color);
                 match s.filter {
                     Some(id) => {
                         e.u8(1);
@@ -1262,8 +1262,8 @@ impl Engine {
                     }
                 }
             }
-            e.u32(colours.len() as u32);
-            for (p, c) in colours {
+            e.u32(colors.len() as u32);
+            for (p, c) in colors {
                 e.pos(reg, p).u8(c);
             }
             e.u32(records.len() as u32);
@@ -1301,7 +1301,7 @@ impl Engine {
                 FilterEntry::Resource(r) => e.u8(0).res(&self.reg, *r),
                 FilterEntry::Id(id) => e.u8(1).str(id),
                 FilterEntry::Kind(k) => e.u8(2).str(&self.reg.kinds.get(*k).name),
-                FilterEntry::Colour(c) => e.u8(3).u8(*c),
+                FilterEntry::Color(c) => e.u8(3).u8(*c),
             };
         }
     }
@@ -1326,7 +1326,7 @@ impl Engine {
                         entries.push(FilterEntry::Kind(k));
                     }
                 }
-                _ => entries.push(FilterEntry::Colour(d.u8()?)),
+                _ => entries.push(FilterEntry::Color(d.u8()?)),
             }
         }
         Some(Filter { mode, entries })
@@ -1357,7 +1357,7 @@ impl Engine {
                 let mode = SideMode::from_index(d.u8().ok_or_else(bad)?);
                 let disabled = d.u8().ok_or_else(bad)? != 0;
                 let priority = d.i32().ok_or_else(bad)?;
-                let colour = d.u8().ok_or_else(bad)?;
+                let color = d.u8().ok_or_else(bad)?;
                 let filter = match d.u8().ok_or_else(bad)? {
                     1 => {
                         let f = Self::load_filter(&mut self.reg, &mut d).ok_or_else(bad)?;
@@ -1372,13 +1372,13 @@ impl Engine {
                         disabled,
                         priority,
                         filter,
-                        colour,
+                        color,
                     },
                 ));
             }
             for _ in 0..d.u32().ok_or_else(bad)? {
                 let pos = d.pos(&mut self.reg).ok_or_else(bad)?;
-                p.colours.insert(pos, d.u8().ok_or_else(bad)?);
+                p.colors.insert(pos, d.u8().ok_or_else(bad)?);
             }
             for _ in 0..d.u32().ok_or_else(bad)? {
                 let pos = d.pos(&mut self.reg).ok_or_else(bad)?;
