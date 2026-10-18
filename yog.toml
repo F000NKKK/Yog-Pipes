@@ -19,7 +19,12 @@ export_dir = "../Yog-Mod-Loader/fabric/run/yog-mods"
 command    = "./gradlew"
 args       = ["runClient", "-Pminecraft_version=1.21.1"]
 cwd        = "../Yog-Mod-Loader/fabric"
-env        = ["JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64"]
+env        = [
+    "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64",
+    "__NV_PRIME_RENDER_OFFLOAD=1",
+    "__GLX_VENDOR_LIBRARY_NAME=nvidia",
+    "__VK_LAYER_NV_optimus=NVIDIA_only",
+]
 
 [run."fabric-1.20.1"]
 name       = "Fabric 1.20.1"
@@ -27,7 +32,12 @@ export_dir = "../Yog-Mod-Loader/fabric/run/yog-mods"
 command    = "./gradlew"
 args       = ["runClient", "-Pminecraft_version=1.20.1"]
 cwd        = "../Yog-Mod-Loader/fabric"
-env        = ["JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64"]
+env        = [
+    "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64",
+    "__NV_PRIME_RENDER_OFFLOAD=1",
+    "__GLX_VENDOR_LIBRARY_NAME=nvidia",
+    "__VK_LAYER_NV_optimus=NVIDIA_only",
+]
 
 [run."forge-1.21.1"]
 name       = "Forge 1.21.1"
@@ -35,7 +45,12 @@ export_dir = "../Yog-Mod-Loader/forge/run/yog-mods"
 command    = "./gradlew"
 args       = ["runClient", "-Pminecraft_version=1.21.1"]
 cwd        = "../Yog-Mod-Loader/forge"
-env        = ["JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64"]
+env        = [
+    "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64",
+    "__NV_PRIME_RENDER_OFFLOAD=1",
+    "__GLX_VENDOR_LIBRARY_NAME=nvidia",
+    "__VK_LAYER_NV_optimus=NVIDIA_only",
+]
 
 [run."forge-1.20.1"]
 name       = "Forge 1.20.1"
@@ -43,7 +58,12 @@ export_dir = "../Yog-Mod-Loader/forge/run/yog-mods"
 command    = "./gradlew"
 args       = ["runClient", "-Pminecraft_version=1.20.1"]
 cwd        = "../Yog-Mod-Loader/forge"
-env        = ["JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64"]
+env        = [
+    "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64",
+    "__NV_PRIME_RENDER_OFFLOAD=1",
+    "__GLX_VENDOR_LIBRARY_NAME=nvidia",
+    "__VK_LAYER_NV_optimus=NVIDIA_only",
+]
 
 [run."neoforge-1.21.1"]
 name       = "NeoForge 1.21.1"
@@ -51,7 +71,12 @@ export_dir = "../Yog-Mod-Loader/neoforge/run/yog-mods"
 command    = "./gradlew"
 args       = ["runClient", "-Pminecraft_version=1.21.1"]
 cwd        = "../Yog-Mod-Loader/neoforge"
-env        = ["JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64"]
+env        = [
+    "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64",
+    "__NV_PRIME_RENDER_OFFLOAD=1",
+    "__GLX_VENDOR_LIBRARY_NAME=nvidia",
+    "__VK_LAYER_NV_optimus=NVIDIA_only",
+]
 
 [run."neoforge-1.20.1"]
 name       = "NeoForge 1.20.1"
@@ -59,4 +84,9 @@ export_dir = "../Yog-Mod-Loader/neoforge/run/yog-mods"
 command    = "./gradlew"
 args       = ["runClient", "-Pminecraft_version=1.20.1"]
 cwd        = "../Yog-Mod-Loader/neoforge"
-env        = ["JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64"]
+env        = [
+    "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64",
+    "__NV_PRIME_RENDER_OFFLOAD=1",
+    "__GLX_VENDOR_LIBRARY_NAME=nvidia",
+    "__VK_LAYER_NV_optimus=NVIDIA_only",
+]
