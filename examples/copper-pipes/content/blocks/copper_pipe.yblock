@@ -13,7 +13,7 @@
   },
   // The 6×6×6 core; the collision shape follows it ("shape": "auto").
   "model": {
-    "textures": { "pipe": "minecraft:block/copper_block" },
+    "textures": { "pipe": "@texture:minecraft:block/copper_block" },
     "elements": [
       {
         "name": "core",
@@ -34,7 +34,7 @@
   "states": {
     "connect": {
       "arm": {
-        "textures": { "pipe": "minecraft:block/copper_block" },
+        "textures": { "pipe": "@texture:minecraft:block/copper_block" },
         "elements": [
           {
             "name": "arm",
