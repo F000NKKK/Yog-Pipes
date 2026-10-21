@@ -1,0 +1,13 @@
+*.yblock diff=ydata
+*.yitem diff=ydata
+*.yentity diff=ydata
+*.yrecipe diff=ydata
+*.ybook diff=ydata
+*.ydef diff=ydata
+*.yres diff=ydata
+*.ymodel diff=ydata
+*.yanim diff=ydata
+*.yfont diff=ydata
+*.ytexture diff=ydata
+*.ymaterial diff=ydata
+*.ydata diff=ydata

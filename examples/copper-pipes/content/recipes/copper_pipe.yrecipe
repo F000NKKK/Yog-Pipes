@@ -1,9 +1,1 @@
-{
-  "type": "shaped",
-  "pattern": ["CCC"],
-  "key": {
-    "C": "@tag:item:yog:ingots/copper"
-  },
-  "result": "@item:copper-pipes:copper_pipe",
-  "count": 8
-}
+YOGD	typeshapedpatternCCCkeyC7@tag:item:yog:ingots/copperresult=@item:copper-pipes:copper_pipecount
