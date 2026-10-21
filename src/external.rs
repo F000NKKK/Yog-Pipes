@@ -9,7 +9,7 @@ use crate::transport::layer::Port;
 use crate::transport::model::external::Driver;
 use crate::transport::model::{Activity, Cx};
 
-use crate::bridge::{self, Target, call};
+use crate::bridge::{self, Target};
 use crate::types::{
     ExternalActivity, ExternalCall, ExternalOp, ExternalPort, ExternalReply, ExternalResult,
     Handler, Stack,
@@ -34,7 +34,7 @@ impl ExternalDriver {
     }
 
     fn call(&mut self, input: &ExternalCall) -> Option<ExternalReply> {
-        let reply = call!(self.target, input, ExternalReply);
+        let reply = self.target.call(input);
         if reply.is_none() {
             log_once(
                 &self.capability,

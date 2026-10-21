@@ -2,138 +2,46 @@
 //! (`crate::types`, by name) and the engine's interned ids.
 //!
 //! No callback ABI is invented here: a handler is an ordinary
-//! `#[yog_export]` function, resolved by `(mod id, symbol)` through the
-//! interop table and called through the C-ABI wrapper `#[yog_export]`
-//! generates, with rkyv-encoded input and output. Resolved pointers are
-//! cached until any registration changes ([`invalidate`]), so a reloaded
-//! mod's new function is picked up.
+//! `#[yog_export]` function of one argument, called by `(mod id, symbol)`
+//! on the bus — its argument and answer as Yog Data. It's looked up on
+//! each call, so a reloaded mod's new function is picked up.
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use yog_api::yog_data::{self, Schema};
 
 use crate::transport::ids::{Face, Pos, ResId, normalize_dim};
 use crate::transport::model::Want as CoreWant;
 use crate::transport::registry::{Filter, FilterEntry, FilterMode, Registry};
-use yog_api::rkyv;
 
 use crate::types::{
     FilterDef, FilterRule, Handler, PipeFace, PipePayload, PipePos, Resource, Stack, Want,
 };
 
-type WrapFn = unsafe extern "C" fn(
-    input_ptr: *const u8,
-    input_len: u32,
-    out_data: *mut *mut u8,
-    out_len: *mut u32,
-    out_cap: *mut u32,
-);
-
-/// Bumped by [`invalidate`]; a cached pointer from an older generation is
-/// resolved again.
-static GENERATION: AtomicU32 = AtomicU32::new(1);
-
-/// Drop every cached handler pointer (a mod registered or reloaded).
-pub fn invalidate() {
-    GENERATION.fetch_add(1, Ordering::Relaxed);
-}
-
-/// A handler with its resolved function, if any.
+/// A handler to call.
 #[derive(Debug, Clone)]
 pub struct Target {
     pub handler: Handler,
-    cached: Option<(u32, usize)>,
 }
 
 impl Target {
     pub fn new(handler: Handler) -> Self {
-        Target {
-            handler,
-            cached: None,
-        }
+        Target { handler }
     }
 
-    fn resolve(&mut self) -> Option<WrapFn> {
-        let generation = GENERATION.load(Ordering::Relaxed);
-        if let Some((g, ptr)) = self.cached
-            && g == generation
-        {
-            // SAFETY: only pointers from `import_raw` of a `#[yog_export]`
-            // wrapper are cached, and they all have this signature.
-            return Some(unsafe { std::mem::transmute::<usize, WrapFn>(ptr) });
-        }
-        // SAFETY: the API pointer is the runtime's table, captured when
-        // this mod was registered.
-        let registry = unsafe {
-            yog_api::Registry::from_raw(yog_api::__current_api_ptr() as *const yog_api::YogApi)
-        };
-        let ptr = unsafe {
-            registry
-                .interop()
-                .import_raw(&self.handler.mod_id, &self.handler.symbol)
-        }?;
-        self.cached = Some((generation, ptr as usize));
-        // SAFETY: as above.
-        Some(unsafe { std::mem::transmute::<*const std::ffi::c_void, WrapFn>(ptr) })
-    }
-
-    /// Call the handler with rkyv-encoded `input`; its encoded output, or
-    /// `None` when the handler isn't (or no longer) exported.
-    pub fn invoke(&mut self, input: &[u8]) -> Option<Vec<u8>> {
-        let f = self.resolve()?;
-        let mut out_data: *mut u8 = std::ptr::null_mut();
-        let mut out_len: u32 = 0;
-        let mut out_cap: u32 = 0;
-        // SAFETY: `f` is a `#[yog_export]` wrapper; it hands back a buffer
-        // allocated as a `Vec<u8>` whose ownership passes to us.
-        unsafe {
-            f(
-                input.as_ptr(),
-                input.len() as u32,
-                &mut out_data,
-                &mut out_len,
-                &mut out_cap,
-            );
-            if out_data.is_null() {
-                return Some(Vec::new());
-            }
-            Some(Vec::from_raw_parts(
-                out_data,
-                out_len as usize,
-                out_cap as usize,
-            ))
-        }
+    /// Calls the handler with `input`: its answer, `None` when it isn't
+    /// (or no longer) exported or failed.
+    pub fn call<A: Schema, R: Schema>(&self, input: &A) -> Option<R> {
+        yog_api::call_export(&self.handler.mod_id, &self.handler.symbol, input)
     }
 }
 
-/// Call `target` with `input` and decode its reply as `$out`; `None` when
-/// the handler is missing or the reply doesn't decode.
-macro_rules! call {
-    ($target:expr, $input:expr, $out:ty) => {{
-        match ::yog_api::rkyv::to_bytes::<::yog_api::rkyv::rancor::Error>($input) {
-            Ok(bytes) => $target.invoke(&bytes).and_then(|out| {
-                let mut aligned = ::yog_api::rkyv::util::AlignedVec::<16>::new();
-                aligned.extend_from_slice(&out);
-                ::yog_api::rkyv::from_bytes::<$out, ::yog_api::rkyv::rancor::Error>(&aligned).ok()
-            }),
-            Err(_) => None,
-        }
-    }};
+/// A value as stored (binary Yog Data, as the calls carry it).
+pub fn encode<T: Schema>(value: &T) -> Vec<u8> {
+    yog_data::schema::to_bytes(value)
 }
-pub(crate) use call;
 
-/// Encode a value for storage (rkyv, like the interop calls).
-pub fn encode<T>(value: &T) -> Vec<u8>
-where
-    T: for<'a> rkyv::Serialize<
-            rkyv::api::high::HighSerializer<
-                rkyv::util::AlignedVec,
-                rkyv::ser::allocator::ArenaHandle<'a>,
-                rkyv::rancor::Error,
-            >,
-        >,
-{
-    rkyv::to_bytes::<rkyv::rancor::Error>(value)
-        .map(|b| b.to_vec())
-        .unwrap_or_default()
+/// A stored value back; `None` if the bytes aren't one.
+pub fn decode<T: Schema>(bytes: &[u8]) -> Option<T> {
+    yog_data::read_bytes(bytes).ok()
 }
 
 // ── Conversions ──────────────────────────────────────────────────────────────
@@ -256,7 +164,5 @@ pub fn pack(p: &PipePayload) -> Vec<u8> {
 }
 
 pub fn unpack(bytes: &[u8]) -> Option<PipePayload> {
-    let mut aligned = rkyv::util::AlignedVec::<16>::new();
-    aligned.extend_from_slice(bytes);
-    rkyv::from_bytes::<PipePayload, rkyv::rancor::Error>(&aligned).ok()
+    decode(bytes)
 }

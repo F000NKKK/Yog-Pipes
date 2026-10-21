@@ -87,7 +87,6 @@ pub(crate) fn register_kind(def: KindDef) -> Result<(), String> {
 }
 
 pub(crate) fn register_capability(def: CapabilityDef) -> Result<(), String> {
-    bridge::invalidate();
     host::with(|host| {
         let events = host.handlers.intern(def.events.as_ref());
         let model = match def.mechanic {
@@ -156,7 +155,6 @@ pub(crate) fn attach(def: AttachDef) -> Result<(), String> {
 }
 
 pub(crate) fn register_endpoint(def: EndpointDef) -> Result<(), String> {
-    bridge::invalidate();
     host::with(|host| register_endpoint_in(host, def))?
 }
 
@@ -185,7 +183,7 @@ pub(crate) fn register_endpoint_in(host: &mut Host, def: EndpointDef) -> Result<
             .retain(|d| !(d.capability == def.capability && d.target == def.target));
         host.positional.push(def);
         // Connect it to pipes already next to it.
-        host.run(None, |e, io, probe| e.place(io, probe, p));
+        host.run(|e, io, probe| e.place(io, probe, p));
     }
     Ok(())
 }
@@ -196,7 +194,7 @@ pub(crate) fn unregister_endpoint(capability: String, pos: PipePos) -> Result<()
         let target = EndpointTarget::Position(pos);
         host.positional
             .retain(|d| !(d.capability == capability && d.target == target));
-        host.run(None, |e, io, _| e.unregister_endpoint(io, &capability, p));
+        host.run(|e, io, _| e.unregister_endpoint(io, &capability, p));
     });
     Ok(())
 }
@@ -230,7 +228,7 @@ pub(crate) fn set_side(
             filter,
             color: side.color,
         };
-        host.run(None, |e, io, probe| {
+        host.run(|e, io, probe| {
             e.set_side(io, probe, cap, p, bridge::core_face(face), side)
         });
     });
@@ -243,7 +241,7 @@ pub(crate) fn set_color(capability: String, pos: PipePos, color: u8) -> Result<(
             return;
         };
         let p = bridge::pos(&mut host.engine.reg, &pos);
-        host.run(None, |e, io, probe| e.set_color(io, probe, cap, p, color));
+        host.run(|e, io, probe| e.set_color(io, probe, cap, p, color));
     });
     Ok(())
 }
@@ -251,7 +249,7 @@ pub(crate) fn set_color(capability: String, pos: PipePos, color: u8) -> Result<(
 pub(crate) fn refresh(pos: PipePos) -> Result<(), String> {
     host::mutate(move |host| {
         let p = bridge::pos(&mut host.engine.reg, &pos);
-        host.run(None, |e, io, probe| e.refresh(io, probe, p));
+        host.run(|e, io, probe| e.refresh(io, probe, p));
     });
     Ok(())
 }
@@ -272,7 +270,7 @@ pub(crate) fn emit(capability: String, pos: PipePos, channel: u8, level: u8) -> 
             return;
         };
         let p = bridge::pos(&mut host.engine.reg, &pos);
-        host.run(None, |e, io, _| e.emit(io, cap, p, channel, level));
+        host.run(|e, io, _| e.emit(io, cap, p, channel, level));
     });
     Ok(())
 }
@@ -300,7 +298,7 @@ pub(crate) fn post(
             bridge::pos(&mut host.engine.reg, &to),
         );
         let bytes = bridge::pack(&payload);
-        Ok(host.run(None, |e, io, _| e.post(io, cap, f, t, &bytes)))
+        Ok(host.run(|e, io, _| e.post(io, cap, f, t, &bytes)))
     };
     match host::busy() {
         false => host::with(run)?,
@@ -322,7 +320,7 @@ pub(crate) fn broadcast(
         let cap = cap_id(host, &capability)?;
         let f = bridge::pos(&mut host.engine.reg, &from);
         let bytes = bridge::pack(&payload);
-        Ok(host.run(None, |e, io, _| e.broadcast(io, cap, f, &bytes)))
+        Ok(host.run(|e, io, _| e.broadcast(io, cap, f, &bytes)))
     };
     match host::busy() {
         false => host::with(run)?,

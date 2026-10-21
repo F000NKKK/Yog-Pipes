@@ -15,9 +15,7 @@ use crate::transport::engine::{Engine, Probe};
 use crate::transport::ids::{BlockTypeId, CapId, FxHashMap, Pos, ResId};
 use crate::transport::model::{Call, Event, Io, Want};
 use crate::transport::registry::Registry;
-use yog_api::Server;
-
-use crate::bridge::{self, Target, call};
+use crate::bridge::{self, Target};
 use crate::types::{EndpointCall, EndpointDef, EndpointOp, EndpointReply, Handler, PipeEvent};
 
 pub const REENTRANT: &str =
@@ -53,8 +51,8 @@ impl Handlers {
         id
     }
 
-    fn get(&mut self, id: u32) -> Option<&mut Target> {
-        self.list.get_mut((id as usize).checked_sub(1)?)
+    fn get(&self, id: u32) -> Option<&Target> {
+        self.list.get((id as usize).checked_sub(1)?)
     }
 }
 
@@ -116,42 +114,25 @@ pub fn mutate(f: impl FnOnce(&mut Host) + Send + 'static) {
 
 impl Host {
     /// Run `f` with the engine, endpoint I/O and a probe of the live world
-    /// (`srv`, else the global server handle; without one every position
-    /// reads as unknown).
-    pub fn run<R>(
-        &mut self,
-        srv: Option<&dyn Server>,
-        f: impl FnOnce(&mut Engine, &mut HostIo, &mut WorldProbe) -> R,
-    ) -> R {
-        let global = if srv.is_none() {
-            yog_api::server()
-        } else {
-            None
-        };
-        let srv = srv.or(global.as_ref().map(|s| s as &dyn Server));
+    /// (without a server every position reads as unknown).
+    pub fn run<R>(&mut self, f: impl FnOnce(&mut Engine, &mut HostIo, &mut WorldProbe) -> R) -> R {
         let mut io = HostIo {
             handlers: &mut self.handlers,
         };
-        let mut probe = WorldProbe { srv };
-        f(&mut self.engine, &mut io, &mut probe)
+        f(&mut self.engine, &mut io, &mut WorldProbe)
     }
 }
 
 // ── World probe ──────────────────────────────────────────────────────────────
 
-pub struct WorldProbe<'a> {
-    srv: Option<&'a dyn Server>,
-}
+/// The live world's blocks, asked of the game.
+pub struct WorldProbe;
 
-impl Probe for WorldProbe<'_> {
+impl Probe for WorldProbe {
     fn block(&mut self, reg: &Registry, pos: Pos) -> Option<BlockTypeId> {
-        let id = self.srv?.get_block(
+        let id = yog_api::event::world::get_block(
             reg.dim_name(pos.dim),
-            yog_api::BlockPos {
-                x: pos.x,
-                y: pos.y,
-                z: pos.z,
-            },
+            yog_api::BlockPos::new(pos.x, pos.y, pos.z),
         )?;
         reg.block_id(&id)
     }
@@ -173,12 +154,12 @@ impl HostIo<'_> {
             pipe: bridge::pipe_pos(reg, call.pipe),
             op,
         };
-        call!(target, &input, EndpointReply)
+        target.call(&input)
     }
 
     fn notify(&mut self, reg: &Registry, cap: CapId, event: PipeEvent) {
         if let Some(target) = self.handlers.get(reg.cap(cap).events) {
-            let _: Option<()> = call!(target, &event, ());
+            let _: Option<()> = target.call(&event);
         }
     }
 }

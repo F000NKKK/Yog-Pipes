@@ -37,7 +37,8 @@ mod types;
 pub(crate) use yog_pipes_core as transport;
 
 use crate::transport::ids::Pos;
-use yog_api::{EventPhase, Mod, Registry, Server, info};
+use yog_api::event::{block, server, world};
+use yog_api::{Mod, Registry, info};
 
 pub use api::*;
 pub use types::*;
@@ -71,73 +72,61 @@ impl Mod for YogPipesMod {
         // places blocks (an overload explosion, a machine swapping its
         // block) is itself inside an engine step, and its change is applied
         // right after that step instead of being lost.
-        registry.on_player_place_block(|e, phase, _srv| {
-            if phase == EventPhase::Post {
-                let (dim, block) = (e.dimension.clone(), e.block_id.clone());
-                let (x, y, z) = (e.pos.x, e.pos.y, e.pos.z);
-                host::mutate(move |host| {
-                    let known = host.engine.reg.block_id(&block).is_some();
-                    let p = world_pos(host, &dim, x, y, z);
-                    if known || host.engine.reg.positional.contains_key(&p) {
-                        host.run(None, |e, io, probe| e.place(io, probe, p));
-                    }
-                });
-            }
-            true
+        registry.after::<block::Place, _>(|e, _| {
+            let (dim, block) = (e.dimension.clone(), e.block_id.clone());
+            let (x, y, z) = (e.pos.x, e.pos.y, e.pos.z);
+            host::mutate(move |host| {
+                let known = host.engine.reg.block_id(&block).is_some();
+                let p = world_pos(host, &dim, x, y, z);
+                if known || host.engine.reg.positional.contains_key(&p) {
+                    host.run(|e, io, probe| e.place(io, probe, p));
+                }
+            });
         });
 
-        registry.on_block_break(|e, phase, _srv| {
-            if phase == EventPhase::Post {
-                let dim = e.dimension.clone();
-                let (x, y, z) = (e.pos.x, e.pos.y, e.pos.z);
-                host::mutate(move |host| {
-                    let p = world_pos(host, &dim, x, y, z);
-                    host.run(None, |e, io, _| e.remove(io, p));
-                });
-            }
-            true
+        registry.after::<block::Break, _>(|e, _| {
+            let dim = e.dimension.clone();
+            let (x, y, z) = (e.pos.x, e.pos.y, e.pos.z);
+            host::mutate(move |host| {
+                let p = world_pos(host, &dim, x, y, z);
+                host.run(|e, io, _| e.remove(io, p));
+            });
         });
 
         // An explosion removes blocks without per-block events: re-check
         // what's known in its reach.
-        registry.on_explosion(|e, phase, _srv| {
-            if phase == EventPhase::Post {
-                let dim = e.dimension.clone();
-                let (x, y, z) = (e.x.floor() as i32, e.y.floor() as i32, e.z.floor() as i32);
-                let r = blast_radius(e.power);
-                host::mutate(move |host| {
-                    let center = world_pos(host, &dim, x, y, z);
-                    host.run(None, |e, io, probe| e.revalidate_area(io, probe, center, r));
-                });
-            }
-            true
+        registry.after::<world::Explosion, _>(|e, _| {
+            let dim = e.dimension.clone();
+            let (x, y, z) = (e.x.floor() as i32, e.y.floor() as i32, e.z.floor() as i32);
+            let r = blast_radius(e.power);
+            host::mutate(move |host| {
+                let center = world_pos(host, &dim, x, y, z);
+                host.run(|e, io, probe| e.revalidate_area(io, probe, center, r));
+            });
         });
 
-        registry.on_server_started(|srv| {
-            bridge::invalidate();
-            let _ = host::with(|host| persist::load(host, srv));
+        registry.on::<server::life::Started, _>(|e, _| {
+            let _ = host::with(|host| persist::load(host, &e.world_dir));
         });
 
         // Positions mean nothing once the world is gone: save, then don't
         // carry one world's networks into the next one opened.
-        registry.on_server_stopping(|_srv| {
+        registry.on::<server::life::Stopping, _>(|_, _| {
             let _ = host::with(|host| {
                 persist::unload(host);
                 for def in std::mem::take(&mut host.positional) {
                     if let EndpointTarget::Position(p) = &def.target {
                         let p = bridge::pos(&mut host.engine.reg, p);
-                        host.run(None, |e, io, _| {
-                            e.unregister_endpoint(io, &def.capability, p)
-                        });
+                        host.run(|e, io, _| e.unregister_endpoint(io, &def.capability, p));
                     }
                 }
                 host.engine.clear_world();
             });
         });
 
-        registry.on_tick(|srv: &dyn Server| {
+        registry.on::<server::game::Tick, _>(|_, _| {
             let _ = host::with(|host| {
-                host.run(Some(srv), |e, io, probe| {
+                host.run(|e, io, probe| {
                     e.rediscover(io, probe);
                     e.tick(io);
                 });

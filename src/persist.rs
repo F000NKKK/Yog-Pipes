@@ -11,20 +11,15 @@
 //! not installed this time) stays parked in the engine and is saved again
 //! unchanged.
 //!
-//! Where: the yog-api exposes no world-save hook and no world directory,
-//! only `Server::game_dir` (shared by every singleplayer world). The world
-//! being played is found next to it as the save holding the newest
-//! `session.lock` — Minecraft rewrites that file when it opens a world —
-//! and the state goes into a `yog_api::Storage` rooted there
-//! (`<world>/yog-data/yog-pipes/global.ydata`), so it travels with the save.
+//! Where: the world's own folder (`server::life::Started`), in a
+//! `yog_api::Storage` rooted there (`<world>/yog-data/yog-pipes/global.ydata`),
+//! so it travels with the save.
 //! It's written on server stop and every [`AUTOSAVE_TICKS`] in between if
 //! anything changed.
 
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
-
-use yog_api::rkyv;
 
 use crate::host::Host;
 use crate::types::EndpointDef;
@@ -68,15 +63,13 @@ fn set_aside(store: &mut yog_api::Storage, key: &str, bytes: Vec<u8>, err: &str)
 }
 
 fn decode_endpoints(bytes: &[u8]) -> Result<Vec<EndpointDef>, String> {
-    let mut aligned = rkyv::util::AlignedVec::<16>::new();
-    aligned.extend_from_slice(bytes);
-    rkyv::from_bytes::<Vec<EndpointDef>, rkyv::rancor::Error>(&aligned).map_err(|e| e.to_string())
+    crate::bridge::decode(bytes).ok_or_else(|| "not a list of endpoints".to_string())
 }
 
-/// Load the world's state into `host` (called on server start).
-pub fn load(host: &mut Host, srv: &dyn yog_api::Server) {
+/// Load the state of the world in `world_dir` into `host` (called on server start).
+pub fn load(host: &mut Host, world_dir: &str) {
     TICKS.store(0, Ordering::Relaxed);
-    let dir = PathBuf::from(srv.world_dir());
+    let dir = PathBuf::from(world_dir);
     let mut store = yog_api::Storage::open(&dir.to_string_lossy(), MOD_ID);
     let engine = store.get_bytes(ENGINE_KEY).map(<[u8]>::to_vec);
     let endpoints = store.get_bytes(ENDPOINTS_KEY).map(<[u8]>::to_vec);
