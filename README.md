@@ -194,7 +194,7 @@ the mod's name and description are in `resources/Strings*.yres`.
   `set_block`) aren't observed: call `refresh(pos)`. A removed pipe stays in
   the graph until something re-checks it.
 - **Persistence.** Stored payloads and bindings go to
-  `<world>/yog-data/yog-pipes/global.kv` on server stop and every 5 minutes;
+  `<world>/yog-data/yog-pipes/global.ydata` on server stop and every 5 minutes;
   the graph itself is rediscovered. A crash loses changes since the last
   autosave. The world folder is found as the save with the newest
   `session.lock`, since yog-api has no world-path hook yet.

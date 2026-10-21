@@ -16,7 +16,7 @@
 //! being played is found next to it as the save holding the newest
 //! `session.lock` — Minecraft rewrites that file when it opens a world —
 //! and the state goes into a `yog_api::Storage` rooted there
-//! (`<world>/yog-data/yog-pipes/global.kv`), so it travels with the save.
+//! (`<world>/yog-data/yog-pipes/global.ydata`), so it travels with the save.
 //! It's written on server stop and every [`AUTOSAVE_TICKS`] in between if
 //! anything changed.
 
