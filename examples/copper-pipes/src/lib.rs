@@ -1,8 +1,8 @@
 //! A minimal mod built on Yog Pipes. The pipe block and its recipe are
 //! content (`content/`); this only tells Yog Pipes that it is a pipe.
 
-use yog_api::{warn, Mod, Registry};
-use yog_pipes::{attach, register_capability, AttachDef, CapabilityDef, Distribution, Mechanic};
+use yog_api::{Mod, Registry, warn};
+use yog_pipes::{AttachDef, CapabilityDef, Distribution, Mechanic, attach, register_capability};
 
 use crate::content::Blocks;
 
