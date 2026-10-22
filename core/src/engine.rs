@@ -224,6 +224,12 @@ impl Engine {
         &self.slots[cap.index()].layer
     }
 
+    /// The indicator levels the world shows for `node` of `cap`, in the
+    /// capability's indicator order.
+    pub fn shown(&self, cap: CapId, node: NodeId) -> &[u8] {
+        self.slots[cap.index()].ind.shown(node)
+    }
+
     pub fn model(&self, cap: CapId) -> &dyn Model {
         &*self.slots[cap.index()].model
     }

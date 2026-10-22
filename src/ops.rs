@@ -28,7 +28,7 @@ fn cap_id(host: &Host, name: &str) -> Result<crate::transport::ids::CapId, Strin
         .ok_or_else(|| format!("unknown capability `{name}`"))
 }
 
-fn network_id(net: crate::transport::ids::NetId) -> u64 {
+pub(crate) fn network_id(net: crate::transport::ids::NetId) -> u64 {
     (u64::from(net.generation) << 32) | u64::from(net.index)
 }
 

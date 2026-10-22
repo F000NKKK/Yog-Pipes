@@ -26,6 +26,7 @@
 mod api;
 mod bridge;
 mod external;
+mod flow;
 mod host;
 mod ops;
 mod persist;
@@ -64,6 +65,8 @@ pub struct YogPipesMod;
 
 impl Mod for YogPipesMod {
     fn register(registry: &mut Registry) {
+        // Every pipe, read in place by other mods.
+        flow::register(registry);
         // Keep the networks in step with the world. A block matters only
         // if some mod registered it (as a pipe or an endpoint) — never by
         // a naming convention. Changes made any other way are picked up
