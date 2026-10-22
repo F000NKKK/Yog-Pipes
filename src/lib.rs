@@ -105,8 +105,8 @@ impl Mod for YogPipesMod {
             });
         });
 
-        registry.on::<server::life::Started, _>(|e, _| {
-            let _ = host::with(|host| persist::load(host, &e.world_dir));
+        registry.on::<server::life::Started, _>(|_, _| {
+            let _ = host::with(persist::load);
         });
 
         // Positions mean nothing once the world is gone: save, then don't
@@ -124,13 +124,17 @@ impl Mod for YogPipesMod {
             });
         });
 
+        // Kept with the world: put in its store as it's saved.
+        registry.on::<server::life::Saving, _>(|_, _| {
+            let _ = host::with(|host| persist::save(host));
+        });
+
         registry.on::<server::game::Tick, _>(|_, _| {
             let _ = host::with(|host| {
                 host.run(|e, io, probe| {
                     e.rediscover(io, probe);
                     e.tick(io);
                 });
-                persist::tick(host);
             });
         });
 

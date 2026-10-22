@@ -11,76 +11,65 @@
 //! not installed this time) stays parked in the engine and is saved again
 //! unchanged.
 //!
-//! Where: the world's own folder (`server::life::Started`), in a
-//! `yog_api::Storage` rooted there (`<world>/yog-data/yog-pipes/global.ydata`),
-//! so it travels with the save.
-//! It's written on server stop and every [`AUTOSAVE_TICKS`] in between if
-//! anything changed.
+//! Where: the mod's world store (`yog_api::storage::world`), so it travels
+//! with the save. It's put there as the world is saved (and before the
+//! world is cleared as the server stops); the world's save writes it.
 
-use std::path::PathBuf;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU32, Ordering};
+
+use yog_api::storage::Store;
+use yog_api::yog_data::Value;
 
 use crate::host::Host;
 use crate::types::EndpointDef;
 
-const MOD_ID: &str = "yog-pipes";
-/// `Storage` key of the engine state.
+/// Where the engine state and the positional endpoints are kept in the world store.
 const ENGINE_KEY: &str = "transport";
-/// `Storage` key of the positional endpoints.
 const ENDPOINTS_KEY: &str = "endpoints";
 /// Where saved state this version can't read is set aside.
 const UNREADABLE_SUFFIX: &str = ".unreadable";
-/// Same cadence as vanilla's autosave (5 minutes).
-const AUTOSAVE_TICKS: u32 = 6000;
 
-/// Where the current world's state lives and the bytes last written there
-/// (to skip rewriting unchanged state).
-struct Target {
-    dir: PathBuf,
-    engine: Vec<u8>,
-    endpoints: Vec<u8>,
-}
-
+/// The bytes last kept (unchanged state isn't put again): engine, endpoints.
 /// `None` while no world is open.
-static TARGET: Mutex<Option<Target>> = Mutex::new(None);
-static TICKS: AtomicU32 = AtomicU32::new(0);
+static LAST: Mutex<Option<(Vec<u8>, Vec<u8>)>> = Mutex::new(None);
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn set_aside(store: &mut yog_api::Storage, key: &str, bytes: Vec<u8>, err: &str) {
-    yog_api::warn!(
-        "[yog-pipes] saved `{key}` in {} is unreadable ({err}); kept as `{key}{UNREADABLE_SUFFIX}`",
-        store.path().display()
-    );
-    store.set(format!("{key}{UNREADABLE_SUFFIX}"), bytes);
-    store.remove(key);
-    if let Err(e) = store.flush() {
-        yog_api::error!("[yog-pipes] failed to set unreadable state aside: {e}");
+/// The bytes kept at `key`.
+fn bytes_at(store: &Store, key: &str) -> Option<Vec<u8>> {
+    match store.get::<Value>(key)? {
+        Value::Bytes(b) => Some(b),
+        _ => None,
     }
+}
+
+fn set_aside(store: &Store, key: &str, bytes: Vec<u8>, err: &str) {
+    yog_api::warn!(
+        "[yog-pipes] saved `{key}` is unreadable ({err}); kept as `{key}{UNREADABLE_SUFFIX}`"
+    );
+    store.set(&format!("{key}{UNREADABLE_SUFFIX}"), &Value::Bytes(bytes));
+    store.remove(key);
 }
 
 fn decode_endpoints(bytes: &[u8]) -> Result<Vec<EndpointDef>, String> {
     crate::bridge::decode(bytes).ok_or_else(|| "not a list of endpoints".to_string())
 }
 
-/// Load the state of the world in `world_dir` into `host` (called on server start).
-pub fn load(host: &mut Host, world_dir: &str) {
-    TICKS.store(0, Ordering::Relaxed);
-    let dir = PathBuf::from(world_dir);
-    let mut store = yog_api::Storage::open(&dir.to_string_lossy(), MOD_ID);
-    let engine = store.get_bytes(ENGINE_KEY).map(<[u8]>::to_vec);
-    let endpoints = store.get_bytes(ENDPOINTS_KEY).map(<[u8]>::to_vec);
+/// Load the open world's state into `host` (called on server start).
+pub fn load(host: &mut Host) {
+    let Some(store) = yog_api::storage::world() else {
+        return;
+    };
     let (mut last_engine, mut last_endpoints) = (Vec::new(), Vec::new());
-    if let Some(bytes) = engine {
+    if let Some(bytes) = bytes_at(&store, ENGINE_KEY) {
         match host.engine.load(&bytes) {
             Ok(()) => last_engine = bytes,
-            Err(e) => set_aside(&mut store, ENGINE_KEY, bytes, &e),
+            Err(e) => set_aside(&store, ENGINE_KEY, bytes, &e),
         }
     }
-    if let Some(bytes) = endpoints {
+    if let Some(bytes) = bytes_at(&store, ENDPOINTS_KEY) {
         match decode_endpoints(&bytes) {
             Ok(defs) => {
                 for def in defs {
@@ -93,7 +82,7 @@ pub fn load(host: &mut Host, world_dir: &str) {
                 }
                 last_endpoints = bytes;
             }
-            Err(e) => set_aside(&mut store, ENDPOINTS_KEY, bytes, &e),
+            Err(e) => set_aside(&store, ENDPOINTS_KEY, bytes, &e),
         }
     }
     yog_api::info!(
@@ -101,21 +90,16 @@ pub fn load(host: &mut Host, world_dir: &str) {
         host.engine.parked_records(),
         host.positional.len()
     );
-    *lock(&TARGET) = Some(Target {
-        dir,
-        engine: last_engine,
-        endpoints: last_endpoints,
-    });
+    *lock(&LAST) = Some((last_engine, last_endpoints));
 }
 
+/// Puts the state in the world store if it changed (the world's save writes it).
 pub fn save(host: &Host) {
-    let mut target = lock(&TARGET);
-    let Some(Target {
-        dir,
-        engine: last_engine,
-        endpoints: last_endpoints,
-    }) = target.as_mut()
-    else {
+    let mut last = lock(&LAST);
+    let Some((last_engine, last_endpoints)) = last.as_mut() else {
+        return;
+    };
+    let Some(store) = yog_api::storage::world() else {
         return;
     };
     let engine = host.engine.save();
@@ -123,30 +107,15 @@ pub fn save(host: &Host) {
     if engine == *last_engine && endpoints == *last_endpoints {
         return;
     }
-    let mut store = yog_api::Storage::open(&dir.to_string_lossy(), MOD_ID);
-    store.set(ENGINE_KEY, engine.clone());
-    store.set(ENDPOINTS_KEY, endpoints.clone());
-    match store.flush() {
-        Ok(()) => {
-            *last_engine = engine;
-            *last_endpoints = endpoints;
-        }
-        Err(e) => yog_api::error!(
-            "[yog-pipes] failed to save pipe state to {}: {e}",
-            store.path().display()
-        ),
-    }
+    store.set(ENGINE_KEY, &Value::Bytes(engine.clone()));
+    store.set(ENDPOINTS_KEY, &Value::Bytes(endpoints.clone()));
+    *last_engine = engine;
+    *last_endpoints = endpoints;
 }
 
-pub fn tick(host: &Host) {
-    if TICKS.fetch_add(1, Ordering::Relaxed) + 1 >= AUTOSAVE_TICKS {
-        TICKS.store(0, Ordering::Relaxed);
-        save(host);
-    }
-}
-
-/// Save, then forget the world (server stopping).
+/// Puts the state in the store, then forgets the world (server stopping:
+/// its last save writes it).
 pub fn unload(host: &Host) {
     save(host);
-    *lock(&TARGET) = None;
+    *lock(&LAST) = None;
 }
