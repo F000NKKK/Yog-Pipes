@@ -10,5 +10,5 @@ edition     = "2024"
 [dependencies]
 yog-api = "0.104.1"
 # The game-independent engine (core/); the path is relative to the
-# generated .yog-build/.
+# generated obj/.
 yog-pipes-core = { path = "../core" }

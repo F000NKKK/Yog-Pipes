@@ -1,3 +1,2 @@
-.yog-build/
-target/
-artifacts/
+obj/
+bin/

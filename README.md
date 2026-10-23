@@ -202,7 +202,7 @@ the mod's name and description are in `resources/Strings*.yres`.
 ## 🔨 Building
 
 ```bash
-yog build                  # -> artifacts/yog-pipes.yog
+yog build                  # -> bin/yog-pipes.yog
 yog run fabric 1.21.1      # dev game from the loader SDK (Yog Installer, or ~/.yog/local.toml)
 yog publish exports        # publish yog_pipes_exports to crates.io
 ```

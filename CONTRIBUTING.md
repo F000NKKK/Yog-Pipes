@@ -27,7 +27,7 @@ code, so we can agree on the approach first.
 
    ```bash
    yog check
-   cargo test --manifest-path .yog-build/Cargo.toml
+   cargo test --manifest-path obj/Cargo.toml
    yog build
    ```
 
