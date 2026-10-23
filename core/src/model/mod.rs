@@ -18,6 +18,7 @@ use crate::ids::{CapId, EpTypeId, Face, NetId, NodeId, Pos, ResId};
 use crate::indicate::Indication;
 use crate::layer::{Layer, Port};
 use crate::registry::Registry;
+use yog_sync::Mutex;
 
 // ── Host interface ───────────────────────────────────────────────────────────
 
@@ -265,17 +266,15 @@ impl Cx<'_> {
             return 0;
         }
         let ty = self.reg.endpoint(call.ty);
-        let target_kind = ty
-            .kinds
-            .iter()
-            .copied()
-            .find(|&k| {
-                self.reg
-                    .kinds
-                    .convertible(self.reg.resources.kind(res), k)
-                    .is_some()
-            })
-            .unwrap();
+        // `accepts` found the ratio through one of these kinds.
+        let Some(target_kind) = ty.kinds.iter().copied().find(|&k| {
+            self.reg
+                .kinds
+                .convertible(self.reg.resources.kind(res), k)
+                .is_some()
+        }) else {
+            return 0;
+        };
         let name = self.reg.kinds.get(target_kind).name.clone();
         let converted = self
             .reg
@@ -411,13 +410,13 @@ fn gcd(mut a: u64, mut b: u64) -> u64 {
     a.max(1)
 }
 
+/// Warns about a misbehaving endpoint handler the first time only.
 fn log_once(handler: u32, msg: &str) {
-    use std::sync::Mutex;
     static SEEN: Mutex<Vec<u32>> = Mutex::new(Vec::new());
-    let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    let mut seen = SEEN.lock();
     if !seen.contains(&handler) {
         seen.push(handler);
-        eprintln!("[yog-pipes] endpoint handler {handler}: {msg}");
+        yog_logging::warn!("[yog-pipes] endpoint handler {handler}: {msg}");
     }
 }
 
@@ -451,10 +450,10 @@ impl<T: Default> NetMap<T> {
             self.slots.resize_with(i + 1, || None);
         }
         let slot = &mut self.slots[i];
-        if !matches!(slot, Some((g, _)) if *g == id.generation) {
-            *slot = Some((id.generation, T::default()));
+        if matches!(slot, Some((g, _)) if *g != id.generation) {
+            *slot = None;
         }
-        &mut slot.as_mut().unwrap().1
+        &mut slot.get_or_insert_with(|| (id.generation, T::default())).1
     }
 
     pub fn take(&mut self, id: NetId) -> Option<T> {

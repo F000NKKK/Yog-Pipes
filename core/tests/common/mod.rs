@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 
 use yog_pipes_core::engine::{
-    AttachDef, CapabilityDef, EndpointDef, Engine, ModelSpec, Probe, TargetDef,
+    AttachDef, CapabilityDef, EndpointDef, Engine, ModelSpec, NodeFace, Probe, TargetDef,
 };
 use yog_pipes_core::ids::{BlockTypeId, CapId, DimId, Face, FxHashMap, Pos, ResId};
 use yog_pipes_core::model::{Call, Event, Io, Want};
@@ -235,7 +235,7 @@ impl Sim {
                 mode,
                 ..Default::default()
             };
-            e.set_side(io, probe, cap, pos, face, side)
+            e.set_side(io, probe, NodeFace { cap, pos, face }, side)
         });
     }
 

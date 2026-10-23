@@ -120,6 +120,166 @@ impl Flow {
             }
         }
     }
+
+    /// Endpoints: sources fill their segment, sinks drain theirs. Whether
+    /// anything moved.
+    fn exchange(&mut self, cx: &mut Cx, net: NetId) -> bool {
+        let mut moved = false;
+        self.pulled.clear();
+        for k in 0..self.ports.len() {
+            let p = self.ports[k];
+            self.grow(p.node);
+            moved |= self.fill(cx, net, p);
+            moved |= self.drain(cx, net, p);
+        }
+        moved
+    }
+
+    /// Port `p`'s source fills its segment up to the pipe's capacity.
+    fn fill(&mut self, cx: &mut Cx, net: NetId, p: Port) -> bool {
+        let cap = cx.layer.param(p.node, CAPACITY) as u64;
+        let rate = cx.layer.param(p.node, RATE) as u64;
+        let s = self.segs[p.node.index()];
+        if !cx.source(p) || s.amount >= cap {
+            return false;
+        }
+        let want = s.res.map_or(Want::Any, Want::Res);
+        let Some((res, got)) = cx.extract(p, want, rate.min(cap - s.amount), false) else {
+            return false;
+        };
+        let s = &mut self.segs[p.node.index()];
+        s.res = Some(res);
+        s.amount += got;
+        self.pulled.push(p.ep);
+        self.wake(net, p.node);
+        self.show(cx, p.node);
+        true
+    }
+
+    /// Port `p`'s sink takes from its segment (not what it just gave).
+    fn drain(&mut self, cx: &mut Cx, net: NetId, p: Port) -> bool {
+        let rate = cx.layer.param(p.node, RATE) as u64;
+        let s = self.segs[p.node.index()];
+        let Some(res) = s.res else {
+            return false;
+        };
+        if s.amount == 0 || self.pulled.contains(&p.ep) || !cx.sink(p) {
+            return false;
+        }
+        let put = cx.insert(p, res, rate.min(s.amount), 0, false);
+        if put == 0 {
+            return false;
+        }
+        let s = &mut self.segs[p.node.index()];
+        s.amount -= put;
+        if s.amount == 0 {
+            s.res = None;
+        }
+        self.wake(net, p.node);
+        for l in cx.layer.node(p.node).links {
+            if l != NO_NODE {
+                self.wake(net, l);
+            }
+        }
+        self.show(cx, p.node);
+        true
+    }
+
+    /// Segments: the active ones move toward lower head. Whether anything
+    /// moved; the segments to look at next tick are left active.
+    fn spread(&mut self, cx: &mut Cx, net: NetId) -> bool {
+        let st = self.nets.entry(net);
+        let active = std::mem::take(&mut st.active);
+        let pot = std::mem::take(&mut st.potential);
+        let mut next: Vec<NodeId> = Vec::with_capacity(active.len());
+        for &a in &active {
+            self.queued[a.index()] = false;
+        }
+        let mut moved = false;
+        for &a in &active {
+            if cx.layer.net_of(a) != Some(net) {
+                continue;
+            }
+            let links = cx.layer.node(a).links;
+            for b in links {
+                if b == NO_NODE {
+                    continue;
+                }
+                if self.segs[a.index()].res.is_none() {
+                    break;
+                }
+                if self.flow_between(cx, &pot, a, b) {
+                    moved = true;
+                    // `a` went down: whoever is above it may flow in now.
+                    for n in links.into_iter().chain([a]) {
+                        self.requeue(n, &mut next);
+                    }
+                }
+            }
+        }
+        let st = self.nets.entry(net);
+        st.potential = pot;
+        // Nodes woken by endpoint transfers during this tick are kept too.
+        let woken = std::mem::take(&mut st.active);
+        st.active = next;
+        st.active.extend(woken);
+        moved
+    }
+
+    /// Queue `n` (if a node, once) for the next tick.
+    fn requeue(&mut self, n: NodeId, next: &mut Vec<NodeId>) {
+        if n == NO_NODE {
+            return;
+        }
+        self.grow(n);
+        if !self.queued[n.index()] {
+            self.queued[n.index()] = true;
+            next.push(n);
+        }
+    }
+
+    /// Move from segment `a` to its neighbour `b` if `b`'s head is lower
+    /// and its resource compatible. Whether anything moved.
+    fn flow_between(
+        &mut self,
+        cx: &mut Cx,
+        pot: &FxHashMap<NodeId, u32>,
+        a: NodeId,
+        b: NodeId,
+    ) -> bool {
+        self.grow(b);
+        let (sa, sb) = (self.segs[a.index()], self.segs[b.index()]);
+        let Some(res) = sa.res else {
+            return false;
+        };
+        if sb.res.is_some_and(|r| r != res) {
+            return false;
+        }
+        let head = |n: NodeId, amount: u64| {
+            amount + cx.layer.param(n, HEAD) as u64 * pot.get(&n).copied().unwrap_or(0) as u64
+        };
+        let (ha, hb) = (head(a, sa.amount), head(b, sb.amount));
+        if ha <= hb + 1 {
+            return false;
+        }
+        let rate = cx.layer.param(a, RATE).min(cx.layer.param(b, RATE)) as u64;
+        let room = (cx.layer.param(b, CAPACITY) as u64).saturating_sub(sb.amount);
+        let m = rate.min((ha - hb) / 2).min(sa.amount).min(room);
+        if m == 0 {
+            return false;
+        }
+        let s = &mut self.segs[a.index()];
+        s.amount -= m;
+        if s.amount == 0 {
+            s.res = None;
+        }
+        let t = &mut self.segs[b.index()];
+        t.res = Some(res);
+        t.amount += m;
+        self.show(cx, a);
+        self.show(cx, b);
+        true
+    }
 }
 
 impl Model for Flow {
@@ -183,124 +343,8 @@ impl Model for Flow {
         self.ports.clear();
         self.ports.extend_from_slice(&n.ports);
         self.potentials(cx, net);
-        let mut moved = false;
-
-        // Endpoints: sources fill their segment, sinks drain theirs.
-        self.pulled.clear();
-        for k in 0..self.ports.len() {
-            let p = self.ports[k];
-            self.grow(p.node);
-            let cap = cx.layer.param(p.node, CAPACITY) as u64;
-            let rate = cx.layer.param(p.node, RATE) as u64;
-            let s = self.segs[p.node.index()];
-            if cx.source(p) && s.amount < cap {
-                let want = s.res.map_or(Want::Any, Want::Res);
-                if let Some((res, got)) = cx.extract(p, want, rate.min(cap - s.amount), false) {
-                    let s = &mut self.segs[p.node.index()];
-                    s.res = Some(res);
-                    s.amount += got;
-                    self.pulled.push(p.ep);
-                    self.wake(net, p.node);
-                    self.show(cx, p.node);
-                    moved = true;
-                }
-            }
-            let s = self.segs[p.node.index()];
-            if let Some(res) = s.res
-                && s.amount > 0
-                && !self.pulled.contains(&p.ep)
-                && cx.sink(p)
-            {
-                let put = cx.insert(p, res, rate.min(s.amount), 0, false);
-                if put > 0 {
-                    let s = &mut self.segs[p.node.index()];
-                    s.amount -= put;
-                    if s.amount == 0 {
-                        s.res = None;
-                    }
-                    self.wake(net, p.node);
-                    for l in cx.layer.node(p.node).links {
-                        if l != NO_NODE {
-                            self.wake(net, l);
-                        }
-                    }
-                    self.show(cx, p.node);
-                    moved = true;
-                }
-            }
-        }
-
-        // Segments: move toward lower head.
+        let moved = self.exchange(cx, net) | self.spread(cx, net);
         let st = self.nets.entry(net);
-        let active = std::mem::take(&mut st.active);
-        let pot = std::mem::take(&mut st.potential);
-        let mut next: Vec<NodeId> = Vec::with_capacity(active.len());
-        for &a in &active {
-            self.queued[a.index()] = false;
-        }
-        for &a in &active {
-            if cx.layer.net_of(a) != Some(net) {
-                continue;
-            }
-            let mut any = false;
-            let links = cx.layer.node(a).links;
-            for b in links {
-                if b == NO_NODE {
-                    continue;
-                }
-                self.grow(b);
-                let (sa, sb) = (self.segs[a.index()], self.segs[b.index()]);
-                let Some(res) = sa.res else {
-                    break;
-                };
-                if sb.res.is_some_and(|r| r != res) {
-                    continue;
-                }
-                let head = |n: NodeId, amount: u64| {
-                    amount
-                        + cx.layer.param(n, HEAD) as u64 * pot.get(&n).copied().unwrap_or(0) as u64
-                };
-                let (ha, hb) = (head(a, sa.amount), head(b, sb.amount));
-                if ha <= hb + 1 {
-                    continue;
-                }
-                let rate = cx.layer.param(a, RATE).min(cx.layer.param(b, RATE)) as u64;
-                let room = (cx.layer.param(b, CAPACITY) as u64).saturating_sub(sb.amount);
-                let m = rate.min((ha - hb) / 2).min(sa.amount).min(room);
-                if m == 0 {
-                    continue;
-                }
-                let s = &mut self.segs[a.index()];
-                s.amount -= m;
-                if s.amount == 0 {
-                    s.res = None;
-                }
-                let t = &mut self.segs[b.index()];
-                t.res = Some(res);
-                t.amount += m;
-                any = true;
-                // `a` went down: whoever is above it may flow in now.
-                for n in links.into_iter().chain([a]) {
-                    if n == NO_NODE {
-                        continue;
-                    }
-                    self.grow(n);
-                    if !self.queued[n.index()] {
-                        self.queued[n.index()] = true;
-                        next.push(n);
-                    }
-                }
-                self.show(cx, a);
-                self.show(cx, b);
-            }
-            moved |= any;
-        }
-        let st = self.nets.entry(net);
-        st.potential = pot;
-        // Nodes woken by endpoint transfers during this tick are kept too.
-        let woken = std::mem::take(&mut st.active);
-        st.active = next;
-        st.active.extend(woken);
         if !st.active.is_empty() || moved {
             Activity::Active
         } else {

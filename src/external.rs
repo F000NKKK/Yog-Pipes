@@ -46,9 +46,9 @@ impl ExternalDriver {
 }
 
 fn log_once(capability: &str, msg: &str) {
-    use std::sync::Mutex;
+    use yog_api::sync::Mutex;
     static SEEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
-    let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    let mut seen = SEEN.lock();
     if !seen.iter().any(|s| s == capability) {
         seen.push(capability.to_string());
         yog_api::warn!("[yog-pipes] {capability}: {msg}");

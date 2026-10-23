@@ -114,10 +114,13 @@ impl InFlight {
         let n = cx.layer.net(net)?;
         self.ports.clear();
         self.ports.extend_from_slice(&n.ports);
-        let dist = cx.layer.port_distances(from).to_vec();
+        let dist = cx.layer.port_distances(from)?.to_vec();
         self.cands.clear();
         for (i, &p) in self.ports.iter().enumerate() {
-            if Some(cx.layer.endpoint(p.ep).pos) != except && dist[i] != u32::MAX && cx.sink(p) {
+            if Some(cx.layer.endpoint(p.ep).pos) != except
+                && dist.get(i).is_some_and(|&d| d != u32::MAX)
+                && cx.sink(p)
+            {
                 self.cands.push(i);
             }
         }
@@ -204,6 +207,81 @@ impl InFlight {
             }
         }
     }
+
+    /// Each source, from a rotating start, sends a unit on its way.
+    fn pull(&mut self, cx: &mut Cx, net: NetId, st: &mut Net, ports: &[Port]) {
+        let count = ports.len();
+        for k in 0..count {
+            let src = ports[(st.rr + k) % count];
+            if let Some(u) = self.pull_from(cx, net, src, st.rr) {
+                st.units.push(u);
+                self.count(cx, src.node, 1);
+            }
+        }
+        st.rr = st.rr.wrapping_add(1);
+    }
+
+    /// The unit source port `src` sends, if it has something a sink takes.
+    fn pull_from(&mut self, cx: &mut Cx, net: NetId, src: Port, rr: usize) -> Option<Unit> {
+        if !cx.source(src) {
+            return None;
+        }
+        let stack = cx.layer.param_min(net, STACK) as u64;
+        let (res, n) = cx.extract(src, Want::Any, stack, true)?;
+        let color = cx.layer.side(src.node, src.face).color;
+        let src_pos = cx.layer.endpoint(src.ep).pos;
+        let seek = Seek {
+            from: src.node,
+            res,
+            amount: n,
+            color,
+            except: Some(src_pos),
+            rr,
+        };
+        let (dest, acc) = self.target(cx, net, seek)?;
+        let (_, got) = cx.extract(src, Want::Res(res), n.min(acc), false)?;
+        Some(Unit {
+            res,
+            amount: got,
+            node: src.node,
+            progress: 0,
+            dest: Some((dest.node, dest.face)),
+            source: (src_pos, src.face.opposite()),
+            color,
+            returning: false,
+            wait_until: 0,
+        })
+    }
+
+    /// Move unit `u` along its way this tick. Whether it arrived (gone).
+    fn advance(&mut self, cx: &mut Cx, net: NetId, u: &mut Unit, rr: usize) -> bool {
+        if u.wait_until > cx.tick {
+            return false;
+        }
+        let speed = (cx.layer.param(u.node, SPEED) * ONE as f64) as u32;
+        u.progress = u.progress.saturating_add(speed.max(1));
+        while u.progress >= ONE {
+            let Some((dest, _)) = u.dest else {
+                self.retarget(cx, net, u, rr);
+                return false;
+            };
+            match cx.layer.next_hop(dest, u.node) {
+                Some(HOP_HERE) => return self.arrive(cx, net, u, rr),
+                Some(face) => {
+                    let next = cx.layer.node(u.node).links[face as usize];
+                    self.count(cx, u.node, -1);
+                    self.count(cx, next, 1);
+                    u.node = next;
+                    u.progress -= ONE;
+                }
+                None => {
+                    self.retarget(cx, net, u, rr);
+                    return false;
+                }
+            }
+        }
+        false
+    }
 }
 
 impl Model for InFlight {
@@ -266,94 +344,21 @@ impl Model for InFlight {
         let Some(n) = cx.layer.net(net) else {
             return Activity::Idle;
         };
+        let ports: Option<Vec<Port>> =
+            (cx.tick >= self.nets.entry(net).next_pull).then(|| n.ports.clone());
         let mut st = std::mem::take(self.nets.entry(net));
         let interval = match cx.layer.param_min(net, INTERVAL) as u64 {
             0 => DEFAULT_INTERVAL,
             i => i,
         };
-        let stack = cx.layer.param_min(net, STACK) as u64;
-
-        // Pull from sources.
-        if cx.tick >= st.next_pull {
+        if let Some(ports) = ports {
             st.next_pull = cx.tick + interval;
-            let ports: Vec<Port> = n.ports.clone();
-            let count = ports.len();
-            for k in 0..count {
-                let src = ports[(st.rr + k) % count];
-                if !cx.source(src) {
-                    continue;
-                }
-                let Some((res, n)) = cx.extract(src, Want::Any, stack, true) else {
-                    continue;
-                };
-                let color = cx.layer.side(src.node, src.face).color;
-                let src_pos = cx.layer.endpoint(src.ep).pos;
-                let Some((dest, acc)) = self.target(
-                    cx,
-                    net,
-                    Seek {
-                        from: src.node,
-                        res,
-                        amount: n,
-                        color,
-                        except: Some(src_pos),
-                        rr: st.rr,
-                    },
-                ) else {
-                    continue;
-                };
-                let Some((_, got)) = cx.extract(src, Want::Res(res), n.min(acc), false) else {
-                    continue;
-                };
-                st.units.push(Unit {
-                    res,
-                    amount: got,
-                    node: src.node,
-                    progress: 0,
-                    dest: Some((dest.node, dest.face)),
-                    source: (src_pos, src.face.opposite()),
-                    color,
-                    returning: false,
-                    wait_until: 0,
-                });
-                self.count(cx, src.node, 1);
-            }
-            st.rr = st.rr.wrapping_add(1);
+            self.pull(cx, net, &mut st, &ports);
         }
-
-        // Move.
         let mut i = 0;
         while i < st.units.len() {
             let mut u = st.units[i].clone();
-            let mut gone = false;
-            if u.wait_until <= cx.tick {
-                let speed = (cx.layer.param(u.node, SPEED) * ONE as f64) as u32;
-                u.progress = u.progress.saturating_add(speed.max(1));
-                while u.progress >= ONE {
-                    let Some((dest, _)) = u.dest else {
-                        self.retarget(cx, net, &mut u, st.rr);
-                        break;
-                    };
-                    match cx.layer.next_hop(dest, u.node) {
-                        Some(HOP_HERE) => {
-                            gone = self.arrive(cx, net, &mut u, st.rr);
-                            break;
-                        }
-                        Some(face) => {
-                            let next = cx.layer.node(u.node).links[face as usize];
-                            self.count(cx, u.node, -1);
-                            self.count(cx, next, 1);
-                            u.node = next;
-                            u.progress -= ONE;
-                        }
-                        None => {
-                            self.retarget(cx, net, &mut u, st.rr);
-                            break;
-                        }
-                    }
-                }
-            }
-            if gone {
+            if self.advance(cx, net, &mut u, st.rr) {
                 self.count(cx, u.node, -1);
                 st.units.swap_remove(i);
             } else {

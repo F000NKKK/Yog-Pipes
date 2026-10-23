@@ -387,11 +387,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "yog-logging"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2998169d5822b2d40f50ef914c5bdbe3723d6511c966c605e80ea840483d7902"
+dependencies = [
+ "yog-sync",
+]
+
+[[package]]
 name = "yog-pipes-core"
 version = "0.5.0"
 dependencies = [
  "criterion",
+ "yog-logging",
+ "yog-sync",
 ]
+
+[[package]]
+name = "yog-sync"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4c372e14360eb6d538aaa6e922656edfdb1998110f1f799dc39aff90200b5a9"
 
 [[package]]
 name = "zerocopy"

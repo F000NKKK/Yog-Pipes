@@ -120,7 +120,7 @@ impl Mod for YogPipesMod {
                 for def in std::mem::take(&mut host.positional) {
                     if let EndpointTarget::Position(p) = &def.target {
                         let p = bridge::pos(&mut host.engine.reg, p);
-                        host.run(|e, io, _| e.unregister_endpoint(io, &def.capability, p));
+                        host.run(|e, _, _| e.unregister_endpoint(&def.capability, p));
                     }
                 }
                 host.engine.clear_world();

@@ -5,7 +5,7 @@
 mod common;
 
 use common::*;
-use yog_pipes_core::engine::ModelSpec;
+use yog_pipes_core::engine::{ModelSpec, NodeFace};
 use yog_pipes_core::ids::{CapId, Face};
 use yog_pipes_core::model::Rng;
 use yog_pipes_core::registry::{
@@ -140,12 +140,32 @@ fn side_off_cuts_links_and_ports() {
             mode: SideMode::Off,
             ..Default::default()
         };
-        e.set_side(io, probe, c, p(0, 0, 0), Face::East, off);
+        e.set_side(
+            io,
+            probe,
+            NodeFace {
+                cap: c,
+                pos: p(0, 0, 0),
+                face: Face::East,
+            },
+            off,
+        );
     });
     assert_eq!(s.e.layer(c).nets().count(), 2);
     s.tick(50);
     assert_eq!(s.w.stores[&p(2, 0, 0)].total(), 0);
-    s.with_io(|e, io, probe| e.set_side(io, probe, c, p(0, 0, 0), Face::East, Side::default()));
+    s.with_io(|e, io, probe| {
+        e.set_side(
+            io,
+            probe,
+            NodeFace {
+                cap: c,
+                pos: p(0, 0, 0),
+                face: Face::East,
+            },
+            Side::default(),
+        )
+    });
     assert_eq!(s.e.layer(c).nets().count(), 1);
     s.tick(50);
     assert_eq!(s.w.stores[&p(2, 0, 0)].total(), 500);
@@ -304,7 +324,16 @@ fn in_flight_filters_route_by_resource() {
             filter: Some(f),
             ..Default::default()
         };
-        e.set_side(io, probe, c, p(2, 0, 0), Face::South, side);
+        e.set_side(
+            io,
+            probe,
+            NodeFace {
+                cap: c,
+                pos: p(2, 0, 0),
+                face: Face::South,
+            },
+            side,
+        );
     });
     s.tick(400);
     assert_eq!(s.w.stores[&p(2, 0, 1)].of(dirt), 0);

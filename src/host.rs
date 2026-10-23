@@ -9,7 +9,7 @@
 //! a handler fail with [`REENTRANT`] instead of deadlocking.
 
 use std::cell::Cell;
-use std::sync::{LazyLock, Mutex, MutexGuard};
+use yog_api::sync::{LazyLock, Mutex};
 
 use crate::transport::engine::{Engine, Probe};
 use crate::transport::ids::{BlockTypeId, CapId, FxHashMap, Pos, ResId};
@@ -71,10 +71,6 @@ thread_local! {
     static BUSY: Cell<bool> = const { Cell::new(false) };
 }
 
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(|e| e.into_inner())
-}
-
 /// Whether this thread is inside an engine step (running a handler).
 pub fn busy() -> bool {
     BUSY.get()
@@ -86,11 +82,11 @@ pub fn with<R>(f: impl FnOnce(&mut Host) -> R) -> Result<R, String> {
     if BUSY.get() {
         return Err(REENTRANT.into());
     }
-    let mut host = lock(&HOST);
+    let mut host = HOST.lock();
     BUSY.set(true);
     let r = f(&mut host);
     loop {
-        let queued = std::mem::take(&mut *lock(&DEFERRED));
+        let queued = std::mem::take(&mut *DEFERRED.lock());
         if queued.is_empty() {
             break;
         }
@@ -106,7 +102,7 @@ pub fn with<R>(f: impl FnOnce(&mut Host) -> R) -> Result<R, String> {
 /// engine step.
 pub fn mutate(f: impl FnOnce(&mut Host) + Send + 'static) {
     if BUSY.get() {
-        lock(&DEFERRED).push(Box::new(f));
+        DEFERRED.lock().push(Box::new(f));
     } else {
         let _ = with(f);
     }

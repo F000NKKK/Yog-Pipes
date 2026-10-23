@@ -92,8 +92,29 @@ impl Signal {
     }
 
     fn recompute(&mut self, cx: &mut Cx, net: NetId) {
+        let sources = self.sources(cx, net);
+        let att = self.attenuation;
         let ch = self.channels as usize;
-        let mut sources: Vec<(NodeId, Vec<u8>)> = Vec::new();
+        let st = self.nets.entry(net);
+        let old_nodes = std::mem::take(&mut st.nodes);
+        if att == 0 {
+            st.levels = vec![0; ch];
+            for (_, l) in &sources {
+                for (dst, &src) in st.levels.iter_mut().zip(l) {
+                    *dst = (*dst).max(src);
+                }
+            }
+        } else {
+            st.nodes = Self::spread(cx.layer, &sources, ch, att);
+        }
+        st.dirty = false;
+        self.tell_listeners(cx, net);
+        self.indicate(cx, net, &old_nodes);
+    }
+
+    /// The emitters feeding `net`: the node each feeds and its levels.
+    fn sources(&self, cx: &mut Cx, net: NetId) -> Vec<(NodeId, Vec<u8>)> {
+        let mut sources = Vec::new();
         let mut feeds = Vec::new();
         for (&pos, levels) in &self.emitters {
             Self::feeds(cx.layer, pos, &mut feeds);
@@ -103,52 +124,51 @@ impl Signal {
                 }
             }
         }
-        let st = self.nets.entry(net);
-        let old_nodes = std::mem::take(&mut st.nodes);
-        if self.attenuation == 0 {
-            st.levels = vec![0; ch];
-            for (_, l) in &sources {
-                for (dst, &src) in st.levels.iter_mut().zip(l) {
-                    *dst = (*dst).max(src);
-                }
-            }
-        } else {
-            let att = self.attenuation;
-            let mut nodes: FxHashMap<NodeId, Vec<u8>> = FxHashMap::default();
-            for c in 0..ch {
-                // Bucketed BFS: highest levels first, each node settles once.
-                let mut buckets: Vec<Vec<NodeId>> = vec![Vec::new(); MAX_LEVEL as usize + 1];
-                for (n, l) in &sources {
-                    if l[c] > 0 {
-                        buckets[l[c] as usize].push(*n);
-                    }
-                }
-                for lvl in (1..=MAX_LEVEL as usize).rev() {
-                    let list = std::mem::take(&mut buckets[lvl]);
-                    for n in list {
-                        let e = nodes.entry(n).or_insert_with(|| vec![0; ch]);
-                        if e[c] >= lvl as u8 {
-                            continue;
-                        }
-                        e[c] = lvl as u8;
-                        let next = (lvl as u8).saturating_sub(att);
-                        if next == 0 {
-                            continue;
-                        }
-                        for l in cx.layer.node(n).links {
-                            if l != NO_NODE && nodes.get(&l).is_none_or(|v| v[c] < next) {
-                                buckets[next as usize].push(l);
-                            }
-                        }
-                    }
-                }
-            }
-            nodes.retain(|_, v| v.iter().any(|&x| x > 0));
-            st.nodes = nodes;
-        }
-        st.dirty = false;
+        sources
+    }
 
-        // Listeners.
+    /// Each node's levels, `att` lost a block from the sources: a bucketed
+    /// BFS a channel, highest levels first, each node settled once.
+    fn spread(
+        layer: &Layer,
+        sources: &[(NodeId, Vec<u8>)],
+        ch: usize,
+        att: u8,
+    ) -> FxHashMap<NodeId, Vec<u8>> {
+        let mut nodes: FxHashMap<NodeId, Vec<u8>> = FxHashMap::default();
+        for c in 0..ch {
+            let mut buckets: Vec<Vec<NodeId>> = vec![Vec::new(); MAX_LEVEL as usize + 1];
+            for (n, l) in sources {
+                if l[c] > 0 {
+                    buckets[l[c] as usize].push(*n);
+                }
+            }
+            for lvl in (1..=MAX_LEVEL as usize).rev() {
+                let list = std::mem::take(&mut buckets[lvl]);
+                for n in list {
+                    let e = nodes.entry(n).or_insert_with(|| vec![0; ch]);
+                    if e[c] >= lvl as u8 {
+                        continue;
+                    }
+                    e[c] = lvl as u8;
+                    let next = (lvl as u8).saturating_sub(att);
+                    if next == 0 {
+                        continue;
+                    }
+                    for l in layer.node(n).links {
+                        if l != NO_NODE && nodes.get(&l).is_none_or(|v| v[c] < next) {
+                            buckets[next as usize].push(l);
+                        }
+                    }
+                }
+            }
+        }
+        nodes.retain(|_, v| v.iter().any(|&x| x > 0));
+        nodes
+    }
+
+    /// Tell each listening endpoint of `net` the levels that changed.
+    fn tell_listeners(&mut self, cx: &mut Cx, net: NetId) {
         let ports = cx
             .layer
             .net(net)
@@ -163,34 +183,38 @@ impl Signal {
             for c in (0..self.channels).map(|c| c as u8) {
                 let lvl = self.node_level(cx.layer, p.node, c);
                 let told = self.told.get(&(at, c)).copied().unwrap_or(0);
-                if lvl != told {
-                    if lvl == 0 {
-                        self.told.remove(&(at, c));
-                    } else {
-                        self.told.insert((at, c), lvl);
-                    }
-                    let call = cx.call(p);
-                    cx.io.signal(cx.reg, &call, c, lvl);
+                if lvl == told {
+                    continue;
                 }
+                if lvl == 0 {
+                    self.told.remove(&(at, c));
+                } else {
+                    self.told.insert((at, c), lvl);
+                }
+                let call = cx.call(p);
+                cx.io.signal(cx.reg, &call, c, lvl);
             }
         }
+    }
 
-        // Indication: max over channels.
-        if let Some(i) = cx.indicator(IndicatorSource::Power) {
-            let st = self.nets.get(net).unwrap();
-            if self.attenuation == 0 {
-                let m = st.levels.iter().copied().max().unwrap_or(0);
-                cx.indicate_net(net, i, m as u64, MAX_LEVEL as u64);
-            } else {
-                for (n, v) in &st.nodes {
-                    let m = v.iter().copied().max().unwrap_or(0);
-                    cx.indicate_node(*n, i, m as u64, MAX_LEVEL as u64);
-                }
-                for n in old_nodes.keys() {
-                    if !st.nodes.contains_key(n) && cx.layer.net_of(*n).is_some() {
-                        cx.indicate_node(*n, i, 0, 1);
-                    }
-                }
+    /// Indication: the max over channels, by network or by node; nodes
+    /// that lost their signal shown off.
+    fn indicate(&self, cx: &mut Cx, net: NetId, old_nodes: &FxHashMap<NodeId, Vec<u8>>) {
+        let (Some(i), Some(st)) = (cx.indicator(IndicatorSource::Power), self.nets.get(net)) else {
+            return;
+        };
+        if self.attenuation == 0 {
+            let m = st.levels.iter().copied().max().unwrap_or(0);
+            cx.indicate_net(net, i, m as u64, MAX_LEVEL as u64);
+            return;
+        }
+        for (n, v) in &st.nodes {
+            let m = v.iter().copied().max().unwrap_or(0);
+            cx.indicate_node(*n, i, m as u64, MAX_LEVEL as u64);
+        }
+        for n in old_nodes.keys() {
+            if !st.nodes.contains_key(n) && cx.layer.net_of(*n).is_some() {
+                cx.indicate_node(*n, i, 0, 1);
             }
         }
     }

@@ -508,6 +508,10 @@ dependencies = [
 [[package]]
 name = "yog-pipes-core"
 version = "0.5.0"
+dependencies = [
+ "yog-logging",
+ "yog-sync",
+]
 
 [[package]]
 name = "yog-registry"

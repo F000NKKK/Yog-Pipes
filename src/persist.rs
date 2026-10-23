@@ -15,7 +15,7 @@
 //! with the save. It's put there as the world is saved (and before the
 //! world is cleared as the server stops); the world's save writes it.
 
-use std::sync::Mutex;
+use yog_api::sync::Mutex;
 
 use yog_api::storage::Store;
 use yog_api::yog_data::Value;
@@ -32,10 +32,6 @@ const UNREADABLE_SUFFIX: &str = ".unreadable";
 /// The bytes last kept (unchanged state isn't put again): engine, endpoints.
 /// `None` while no world is open.
 static LAST: Mutex<Option<(Vec<u8>, Vec<u8>)>> = Mutex::new(None);
-
-fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(|e| e.into_inner())
-}
 
 /// The bytes kept at `key`.
 fn bytes_at(store: &Store, key: &str) -> Option<Vec<u8>> {
@@ -90,12 +86,12 @@ pub fn load(host: &mut Host) {
         host.engine.parked_records(),
         host.positional.len()
     );
-    *lock(&LAST) = Some((last_engine, last_endpoints));
+    *LAST.lock() = Some((last_engine, last_endpoints));
 }
 
 /// Puts the state in the world store if it changed (the world's save writes it).
 pub fn save(host: &Host) {
-    let mut last = lock(&LAST);
+    let mut last = LAST.lock();
     let Some((last_engine, last_endpoints)) = last.as_mut() else {
         return;
     };
@@ -117,5 +113,5 @@ pub fn save(host: &Host) {
 /// its last save writes it).
 pub fn unload(host: &Host) {
     save(host);
-    *lock(&LAST) = None;
+    *LAST.lock() = None;
 }

@@ -4,7 +4,7 @@
 
 use crate::transport::engine::{
     AttachDef as CoreAttach, CapabilityDef as CoreCapability, EndpointDef as CoreEndpoint,
-    ModelSpec, TargetDef,
+    ModelSpec, NodeFace, TargetDef,
 };
 use crate::transport::ids::{Face, Pos};
 use crate::transport::registry::{
@@ -194,7 +194,7 @@ pub(crate) fn unregister_endpoint(capability: String, pos: PipePos) -> Result<()
         let target = EndpointTarget::Position(pos);
         host.positional
             .retain(|d| !(d.capability == capability && d.target == target));
-        host.run(|e, io, _| e.unregister_endpoint(io, &capability, p));
+        host.run(|e, _, _| e.unregister_endpoint(&capability, p));
     });
     Ok(())
 }
@@ -229,7 +229,12 @@ pub(crate) fn set_side(
             color: side.color,
         };
         host.run(|e, io, probe| {
-            e.set_side(io, probe, cap, p, bridge::core_face(face), side)
+            let at = NodeFace {
+                cap,
+                pos: p,
+                face: bridge::core_face(face),
+            };
+            e.set_side(io, probe, at, side)
         });
     });
     Ok(())

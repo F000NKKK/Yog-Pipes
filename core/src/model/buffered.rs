@@ -87,8 +87,9 @@ impl Buffered {
         if b.amount > cap {
             let extra = b.amount - cap;
             b.amount = cap;
-            let res = b.res.unwrap();
-            cx.spill(pos, res, extra);
+            if let Some(res) = b.res {
+                cx.spill(pos, res, extra);
+            }
         }
         if b.amount == 0 {
             b.res = None;
@@ -104,6 +105,84 @@ impl Buffered {
         if let Some(i) = cx.indicator(IndicatorSource::Flow) {
             cx.indicate_net(net, i, b.flowing as u64, 1);
         }
+    }
+
+    /// Pull from sources into buffer `b` until full; how much came in.
+    fn pull(&mut self, cx: &mut Cx, net: NetId, b: &mut Buf) -> u64 {
+        let capacity = cx.layer.param_sum(net, CAPACITY) as u64;
+        let rate = cx.layer.param_min(net, THROUGHPUT) as u64;
+        let count = self.ports.len();
+        let mut moved = 0;
+        self.pulled.clear();
+        for k in 0..count {
+            let port = self.ports[(b.rr + k) % count];
+            let room = capacity.saturating_sub(b.amount);
+            if room == 0 {
+                break;
+            }
+            if !cx.source(port) {
+                continue;
+            }
+            let want = b.res.map_or(Want::Any, Want::Res);
+            if let Some((res, got)) = cx.extract(port, want, rate.min(room), false) {
+                b.res = Some(res);
+                b.amount += got;
+                moved += got;
+                self.pulled.push(port.ep);
+            }
+        }
+        moved
+    }
+
+    /// Push from buffer `b` to sinks by the policy; how much went out.
+    fn push(&mut self, cx: &mut Cx, net: NetId, b: &mut Buf) -> u64 {
+        let Some(res) = b.res else {
+            return 0;
+        };
+        let rate = cx.layer.param_min(net, THROUGHPUT) as u64;
+        let policy = cx.reg.cap(cx.cap).policy;
+        self.cands.clear();
+        for (i, &p) in self.ports.iter().enumerate() {
+            if !self.pulled.contains(&p.ep) && cx.sink(p) {
+                self.cands.push(i);
+            }
+        }
+        let ports = &self.ports;
+        order(
+            policy,
+            &mut self.cands,
+            b.rr,
+            cx.rng,
+            |i| cx_priority(cx.layer, cx.reg, ports[i]),
+            |_| 0,
+        );
+        let mut moved = 0;
+        if policy == Policy::EvenSplit {
+            self.caps.clear();
+            for &i in &self.cands {
+                let want = rate.min(b.amount);
+                self.caps.push(cx.insert(self.ports[i], res, want, 0, true));
+            }
+            water_fill(b.amount, &self.caps, &mut self.shares);
+            for (k, &i) in self.cands.iter().enumerate() {
+                let got = cx.insert(self.ports[i], res, self.shares[k], 0, false);
+                b.amount -= got;
+                moved += got;
+            }
+        } else {
+            for &i in &self.cands {
+                if b.amount == 0 {
+                    break;
+                }
+                let got = cx.insert(self.ports[i], res, rate.min(b.amount), 0, false);
+                b.amount -= got;
+                moved += got;
+            }
+        }
+        if b.amount == 0 {
+            b.res = None;
+        }
+        moved
     }
 }
 
@@ -137,8 +216,8 @@ impl Model for Buffered {
     fn merged(&mut self, cx: &mut Cx, into: NetId, from: NetId) {
         if let Some(f) = self.nets.take(from)
             && let Some(res) = f.res
+            && let Some(at) = cx.layer.net(into).map(|n| n.any_node)
         {
-            let at = cx.layer.net(into).unwrap().any_node;
             self.absorb(cx, into, res, f.amount, at);
         }
         cx.ind.net_changed(into);
@@ -178,76 +257,8 @@ impl Model for Buffered {
         };
         self.ports.clear();
         self.ports.extend_from_slice(&n.ports);
-        let capacity = cx.layer.param_sum(net, CAPACITY) as u64;
-        let rate = cx.layer.param_min(net, THROUGHPUT) as u64;
-        let policy = cx.reg.cap(cx.cap).policy;
         let mut b = self.nets.entry(net).clone();
-        let count = self.ports.len();
-        let mut moved = 0u64;
-
-        // Pull from sources until full.
-        self.pulled.clear();
-        for k in 0..count {
-            let port = self.ports[(b.rr + k) % count];
-            let room = capacity.saturating_sub(b.amount);
-            if room == 0 {
-                break;
-            }
-            if !cx.source(port) {
-                continue;
-            }
-            let want = b.res.map_or(Want::Any, Want::Res);
-            if let Some((res, got)) = cx.extract(port, want, rate.min(room), false) {
-                b.res = Some(res);
-                b.amount += got;
-                moved += got;
-                self.pulled.push(port.ep);
-            }
-        }
-
-        // Push to sinks by the policy.
-        if let Some(res) = b.res {
-            self.cands.clear();
-            for (i, &p) in self.ports.iter().enumerate() {
-                if !self.pulled.contains(&p.ep) && cx.sink(p) {
-                    self.cands.push(i);
-                }
-            }
-            let ports = &self.ports;
-            order(
-                policy,
-                &mut self.cands,
-                b.rr,
-                cx.rng,
-                |i| cx_priority(cx.layer, cx.reg, ports[i]),
-                |_| 0,
-            );
-            if policy == Policy::EvenSplit {
-                self.caps.clear();
-                for &i in &self.cands {
-                    let want = rate.min(b.amount);
-                    self.caps.push(cx.insert(self.ports[i], res, want, 0, true));
-                }
-                water_fill(b.amount, &self.caps, &mut self.shares);
-                for (k, &i) in self.cands.iter().enumerate() {
-                    let got = cx.insert(self.ports[i], res, self.shares[k], 0, false);
-                    b.amount -= got;
-                    moved += got;
-                }
-            } else {
-                for &i in &self.cands {
-                    if b.amount == 0 {
-                        break;
-                    }
-                    let got = cx.insert(self.ports[i], res, rate.min(b.amount), 0, false);
-                    b.amount -= got;
-                    moved += got;
-                }
-            }
-            if b.amount == 0 {
-                b.res = None;
-            }
-        }
+        let moved = self.pull(cx, net, &mut b) + self.push(cx, net, &mut b);
         b.rr = b.rr.wrapping_add(1);
         b.flowing = moved > 0;
         *self.nets.entry(net) = b;
