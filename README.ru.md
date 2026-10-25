@@ -7,7 +7,7 @@
 ### Транспортный фреймворк для модов Yog: трубы, сети, маршрутизация и доставка
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.0-informational.svg)](yog.toml)
+[![Version](https://img.shields.io/badge/version-0.12.0-informational.svg)](yog.toml)
 [![Exports crate](https://img.shields.io/crates/v/yog_pipes_exports.svg?label=yog_pipes_exports)](https://crates.io/crates/yog_pipes_exports)
 [![Exports license](https://img.shields.io/badge/exports-MIT%20OR%20Apache--2.0-green.svg)](#-лицензия)
 [![Loaders](https://img.shields.io/badge/loaders-Fabric%20%7C%20NeoForge%20%7C%20Forge-8A2BE2.svg)](https://github.com/F000NKKK/Yog-Mod-Loader)
@@ -22,23 +22,34 @@
 
 ## 📖 Обзор
 
-**Yog Pipes** — это не набор готовых труб, и ему всё равно, что по трубе
-идёт: предметы, жидкость, сигнал вроде редстоуна или что-то, что придумал
-ваш мод. Он берёт на себя сложную часть работы для других модов на
-[Yog](https://github.com/F000NKKK/Yog-Mod-Loader):
+**Yog Pipes** — не набор готовых труб. Это одна абстрактная труба, на
+которой другие моды [Yog](https://github.com/F000NKKK/Yog-Mod-Loader) строят
+свои, что бы они ни переносили: предметы, жидкость, энергию, сигналы или
+сообщения. Своих блоков, предметов и рецептов он не добавляет, а берёт на
+себя самое сложное:
 
-- 🧱 **Блоки труб**: ваши собственные блоки из файлов `.yblock`, отмеченные как трубы через `register_pipe`
-- 🕸️ **Соединения**: трубы соединяются с соседями из той же группы, а граф
-  сверяется с реальным миром. Ветвление — обычное дело: у узла от 0 до 6
-  соседей, циклы тоже поддерживаются
-- 📡 **Маршрутизация**: разослать данные по всей сети или отправить их в одну
-  точку по кратчайшему пути
-- 📬 **Доставка**: привяжите функцию своего мода к позиции, и Yog Pipes
-  вызовет её, когда туда что-то придёт
-- 💾 **Сохранение**: доставленные данные и привязки обработчиков сохраняются вместе с миром
+- 🧱 **Блоки труб**: ваши собственные блоки из контента `.yblock`, которые
+  `attach` делает трубами возможности. Один блок может нести несколько
+  возможностей, у каждой свои сети
+- 🧩 **Возможности**: что переносят трубы (`register_capability`) — с именем
+  вашего мода, видами ресурсов и *механикой*: buffered (общий буфер), routed
+  (мгновенно, с потерями и лимитом пакета), in-flight (единицы, едущие от
+  блока к блоку), flow (уровни с давлением), signal (каналы с затуханием) или
+  внешняя механика, которую реализует другой мод
+- 🔌 **Конечные точки**: блоки, с которыми трубы обмениваются
+  (`register_endpoint`); ваш обработчик `#[yog_export]` получает каждую
+  вставку, извлечение, сигнал и сообщение
+- ⚖️ **Сохранение количества**: единицы переходят только между сетью и
+  конечной точкой, которая их приняла; то, что вынуждено уйти иначе (сломана
+  труба, переполнение), сообщается владельцу возможности событием
+- 🎛️ **Стороны и индикаторы**: режим, фильтр, приоритет и цвет каждой грани;
+  индикаторы заполнения, потока, единиц или мощности в состоянии блока
+- 📬 **Сообщения**: `post`, `broadcast`, `receive`, `latest` по сети
+- 💾 **Сохранение**: всё, что держат сети, сохраняется вместе с миром;
+  топология заново находится по миру
 
-Что именно *означают* данные (стак предметов, объём жидкости, уровень
-сигнала), решают моды, которые их отправляют и принимают.
+Движок — независимый от игры крейт `yog-pipes-core` (`core/`); этот мод — его
+хост.
 
 ## 🚀 Быстрый старт
 
@@ -52,7 +63,7 @@ yog add --mod yog-pipes
 
 ```toml
 [dependencies.exports]
-yog-pipes = "0.4"
+yog-pipes = "0.12"
 ```
 
 Труба — обычный контент: объявите блок в `.yblock` (модель, отвод,
@@ -69,125 +80,125 @@ yog-pipes = "0.4"
 }
 ```
 
-и отметьте его как трубу. `yog build` подключит крейт `yog_pipes_exports`:
+и сделайте его трубой. `yog build` подключит крейт `yog_pipes_exports`:
 функции вызываются как из обычной Rust-библиотеки, а сам код во время игры
 выполняется внутри мода Yog Pipes:
 
 ```rust
 use crate::content::Blocks;
-use yog_pipes::{register_pipe, PipeDef, PipeKind};
+use yog_pipes::{attach, register_capability, AttachDef, CapabilityDef, Distribution, Mechanic};
 
+// What the pipe carries: items travelling block by block.
+register_capability(CapabilityDef {
+    name: "mymod:items".into(),
+    kinds: Vec::new(),
+    exclusive: true,
+    state_prefix: "items".into(),
+    indicators: Vec::new(),
+    distribution: Distribution::RoundRobin,
+    events: None,
+    mechanic: Mechanic::InFlight,
+}).unwrap();
 let pipe = Blocks::copper_pipe();
-register_pipe(PipeDef {
-    block_id: pipe.id,
-    kind: PipeKind::Item,
-    link_groups: pipe.connect_groups, // те же группы, по которым растут отводы
-    properties: [("speed".into(), 2.0)].into(),
+attach(AttachDef {
+    block: pipe.id,
+    capability: "mymod:items".into(),
+    groups: pipe.connect_groups, // the same groups the arms connect by
+    params: [("speed".into(), 0.5)].into(),
 }).unwrap();
 ```
 
-Рецепты — забота вашего мода (`registry.add_shaped_recipe(...)`). Игрокам
-нужны оба файла `.yog` в `yog-mods/`: ваш и Yog Pipes.
+Рецепты — контент вашего мода (`content/recipes/*.yrecipe`). Игрокам нужны оба
+файла `.yog` в `yog-mods/`: ваш и Yog Pipes.
 [`examples/copper-pipes/`](examples/copper-pipes) — полный мод с одной
 трубой.
 
-### Отправка данных
+### Конечные точки и сообщения
 
 ```rust
-use yog_pipes::{PipePayload, PipePos, bind_handler, broadcast, read, send};
+use yog_pipes::{EndpointDef, EndpointTarget, Handler, PipePayload, PipePos, broadcast, post, register_endpoint};
 
-let pos = |x, y, z| PipePos { dim: "minecraft:overworld".into(), x, y, z };
-
-// Получит каждый узел, связанный с (0, 64, 0): рассылка как у редстоуна.
-// Вызывайте при изменении значения, а не каждый тик.
-broadcast(pos(0, 64, 0), PipePayload { data: vec![15], metadata: vec![] }).unwrap();
-
-// Одна конкретная точка по кратчайшему пути; false, если пути нет.
-let delivered = send(pos(0, 64, 0), pos(4, 64, 0), PipePayload {
-    data: item_bytes,
-    metadata: vec![("kind".into(), "item".into())],
+// Every `mymod:crate` block takes and gives items through the pipes;
+// `#[yog_export] fn on_crate(call: EndpointCall) -> EndpointReply` does it.
+register_endpoint(EndpointDef {
+    capability: "mymod:items".into(),
+    target: EndpointTarget::Block("mymod:crate".into()),
+    kinds: Vec::new(),
+    can_insert: true,
+    can_extract: true,
+    listens_signals: false,
+    listens_messages: false,
+    groups: Vec::new(),
+    priority: 0,
+    max_packet: 0,
+    pressure: 0,
+    handler: Some(Handler { mod_id: "mymod".into(), symbol: "on_crate".into() }),
 }).unwrap();
 
-// Можно опрашивать последнее значение в точке...
-let last = read(pos(4, 64, 0)).unwrap();
-
-// ...или пусть при каждой доставке вызывается
-// `#[yog_export] fn on_pipe_payload(p: PipePayload)` из вашего мода.
-bind_handler(pos(4, 64, 0), "my-mod".into(), "on_pipe_payload".into()).unwrap();
+let pos = |x, y, z| PipePos { dim: "minecraft:overworld".into(), x, y, z };
+let msg = PipePayload { data: vec![15], metadata: vec![] };
+// To one endpoint on the same network: false if not connected or its inbox is full.
+let delivered = post("mymod:bus".into(), pos(0, 64, 0), pos(4, 64, 0), msg.clone()).unwrap();
+// To every endpoint that listens to messages; kept as the network's latest value.
+let reached = broadcast("mymod:bus".into(), pos(0, 64, 0), msg).unwrap();
 ```
 
 ## ⚙️ Как это работает
 
 ```mermaid
 flowchart LR
-    src["Ваш мод<br/>broadcast / send"] --> g
-    subgraph g["Граф труб (на каждое измерение)"]
-        a((A)) --- b((B)) --- c((C))
-        b --- d((D))
-        c --- e((E)) --- d
+    m["Your mod<br/>capabilities · attach · endpoints"] --> e
+    subgraph e["yog-pipes-core (per capability, per dimension)"]
+        t["Topology<br/>place · break · split · merge"] --> n["Networks"]
+        n --> k["Mechanic<br/>buffered · routed · in-flight · flow · signal · external"]
     end
-    g --> st["Сохранённые данные<br/>read(pos)"]
-    g --> h["Обработчик<br/>#[yog_export] fn(PipePayload)"]
+    k --> h["Endpoint handlers<br/>#[yog_export] fn(EndpointCall)"]
+    k --> ev["Capability events<br/>spilled · lost · overload · indicator"]
 ```
 
-1. **Граф** обновляется постепенно, отдельно для каждого измерения, и
-   сверяется с реальным миром. Сосед становится ребром, только если он
-   отмечен через `register_pipe` **и** у них есть общая метка из
-   `link_groups`; по тому же правилу рисуются соединительные отводы блоков.
-   Установка трубы исследует только неизвестные позиции, поломка убирает
-   один узел, а взрыв перепроверяет узлы в радиусе. Сети, построенные до
-   перезапуска или через `/setblock`, обнаруживаются при первом
-   `broadcast`/`send`; `refresh(pos)` перечитывает участок явно.
-2. **Broadcast** доходит до каждого связанного узла, сохраняет там данные и
-   вызывает привязанный обработчик. Подходит для сигналов.
-3. **Send** ищет кратчайший путь и доставляет только адресату. Подходит для
-   перемещения предметов или жидкости между двумя точками.
-4. **Обработчики** — обычные функции `#[yog_export]` в любом моде, которые
-   находятся по `(mod_id, symbol)` через тот же interop, что и все экспорты
-   Yog. Отдельного ABI для колбэков нет.
-
-Своего тикового цикла у Yog Pipes нет: данные движутся, когда вы вызываете
-`broadcast`/`send`, по событиям, как ванильный редстоун.
+1. **Топология.** Ведётся по каждой возможности и измерению, по шагам:
+   поставленная труба присоединяет или объединяет сети, сломанная — разделяет.
+   Соседние трубы соединяются, когда их группы пересекаются (и цвета, если
+   трубы окрашены). Установка и ломание игроками и взрывы отслеживаются; после
+   других изменений (`set_block`, структуры, `/setblock`) вызовите
+   `refresh(pos)`.
+2. **Планирование.** Сеть тикает, только пока активна: после изменения
+   топологии, подключения конечной точки, `wake(pos)`, сигнала или пока об
+   этом просит её механика. Простаивающие сети ничего не стоят за тик.
+3. **Механики** переносят ресурсы между конечными точками по своим правилам и
+   распределению возможности (по кругу, по приоритету, ближайшим, поровну,
+   случайно); параметры `attach` (`speed`, `capacity`, `throughput`, …)
+   настраивают их для каждого блока трубы.
+4. **Конечные точки** отвечают через свои обработчики, которые находятся по
+   `(mod_id, symbol)` через тот же interop, что и любой экспорт Yog, поэтому
+   переживают перезагрузки.
 
 ## 📚 API
 
-| Элемент | Что это |
+| Функция | Что делает |
 |---|---|
-| `PipeDef { block_id, kind, link_groups, properties }` | Отмечает один из ваших блоков как трубу. `link_groups` — обычно `connect_groups` блока. `properties` — открытый `HashMap<String, f64>`: скорость, ёмкость, что угодно; Yog Pipes его не читает |
-| `PipeKind` | `Item`, `Fluid`, `Signal`, `Energy`, `Custom(String)`. Только описание, на маршрутизацию не влияет |
-| `register_pipe(def)` | Отмечает `def.block_id` как трубу (сам блок ваш, регистрируется из `.yblock`) |
-| `pipe_def(block_id) -> Option<PipeDef>` | С каким описанием блок зарегистрирован — для модов, читающих чужие трубы |
-| `PipePos { dim, x, y, z }` | Позиция в мире; `dim` вроде `"minecraft:overworld"` (к голому `"overworld"` пространство имён добавится само) |
-| `PipePayload { data: Vec<u8>, metadata: Vec<(String, String)> }` | Непрозрачные байты и метки; Yog Pipes их не читает |
-| `broadcast(pos, payload)` | Доставить во все связанные узлы |
-| `send(from, to, payload) -> bool` | Доставить по кратчайшему пути |
-| `read(pos) -> Option<PipePayload>` | Последние данные, доставленные в `pos` |
-| `bind_handler(pos, mod_id, symbol)` / `unbind_handler(pos)` | Привязать или снять обработчик |
-| `refresh(pos)` | Перечитать сеть вокруг `pos` после изменений, которых граф не видит |
+| `register_kind(KindDef)` | Вид ресурса: штучный или непрерывный, как сливаются порции, единица, пересчёты |
+| `register_capability(CapabilityDef)` | Возможность: виды, механика, распределение, индикаторы, обработчик событий |
+| `attach(AttachDef)` | Сделать блок трубой возможности, с группами связи и параметрами механики |
+| `register_endpoint(EndpointDef)` / `unregister_endpoint` | Тип блока или одна позиция, с которыми обмениваются трубы |
+| `set_side`, `set_color` | Режим, фильтр, приоритет и цвет одной грани; цвет трубы |
+| `refresh(pos)`, `wake(pos)` | Перечитать блок после незамеченных изменений; тикнуть его сети сейчас |
+| `emit`, `level` | Задать / прочитать уровень сигнала на канале |
+| `post`, `broadcast`, `receive`, `latest` | Сообщения по сети |
+| `network_info`, `pipe_info`, `indication` | Что держит сеть, возможности и грани трубы, значения её индикаторов |
 
-Все функции возвращают `Result<_, String>`. Внутри Yog Pipes у `broadcast`
-и `send` есть первый параметр `&mut Registry` (для вызова обработчиков);
-крейт экспортов его скрывает, вызывающему передавать его не нужно.
-
-Исходники: `src/pipe.rs` (какие блоки — трубы), `graph.rs` (сеть),
-`transport.rs` (broadcast/send/read/привязки), `handler.rs` (вызов через
-interop), `persist.rs` (сохранение), `payload.rs`, `kind.rs`; название и
-описание мода — в `resources/Strings*.yres`.
+Все функции возвращают `Result<_, String>`. Типы (`PipePos`, `PipePayload`,
+`Stack`, `EndpointCall`, `EndpointReply`, `PipeEvent`, …) лежат в крейте
+`yog_pipes_exports`. Полное описание устройства:
+[`docs/design/transport.md`](docs/design/transport.md).
 
 ## ⚠️ Известные ограничения
 
-- **Конечные точки — это трубы.** Узлами графа бывают только блоки,
-  отмеченные через `register_pipe`. До сундука или машины рядом с
-  трубой достучаться можно, привязав обработчик к соседней трубе.
-- **Изменения не от игрока** (поршни, `/setblock`, `set_block` другого мода)
-  граф не замечает: вызовите `refresh(pos)`. Убранная труба остаётся в
-  графе, пока её кто-нибудь не перепроверит.
-- **Сохранение.** Данные и привязки пишутся в
-  `<мир>/yog-data/yog-pipes/global.ydata` при остановке сервера и раз в 5
-  минут; сам граф восстанавливается заново. При вылете теряется всё после
-  последнего автосохранения. Папка мира определяется как сохранение с самым
-  свежим `session.lock`, потому что у yog-api пока нет способа узнать путь
-  к миру.
+- **Незамеченные изменения.** Поршни, `/setblock`, структуры и `set_block`
+  других модов не отслеживаются: вызовите `refresh(pos)`.
+- **Конечные точки задаются явно.** Блок участвует, только если он
+  зарегистрирован конечной точкой возможности (по типу или по позиции — для
+  блоков других модов и ванильных).
 
 ## 🔨 Сборка
 
