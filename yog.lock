@@ -254,9 +254,9 @@ dependencies = [
 
 [[package]]
 name = "yog-api"
-version = "0.104.1"
+version = "0.105.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3470021578a8c4f4774ff165cfb9585b092f3d879e65794a8bf62d14435cac22"
+checksum = "30cfe05b589967df33004c0bd90ba1957aa5b6164af95077ef308131e07368ff"
 dependencies = [
  "ctor",
  "yog-abi",
@@ -296,9 +296,9 @@ dependencies = [
 
 [[package]]
 name = "yog-book"
-version = "0.73.1"
+version = "0.73.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a106e0775816e78c1922db3fb7dd452ecf39163d959748df5dde5cdc5b3b9bf"
+checksum = "a740c971fb2efbde05934a17c147d387ebcc2434c5b0de1417dd024f213d0fb5"
 dependencies = [
  "serde_json",
  "yog-data",
@@ -400,9 +400,9 @@ dependencies = [
 
 [[package]]
 name = "yog-event"
-version = "0.11.1"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44dc2ecf994f44584db2c265ac24272beb0fa4dc64a347d713bdf184a9c23366"
+checksum = "e6490d283956550f7140c3e9ec10ae1e3346ff40f4c19d4fdd150a41ee92c932"
 dependencies = [
  "pastey",
  "yog-body",
@@ -429,9 +429,9 @@ dependencies = [
 
 [[package]]
 name = "yog-formats"
-version = "0.15.1"
+version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a084a3862c4b59b0060ed86240f910cdfb464c10320d130644ba97502bf41c60"
+checksum = "e492ad765f0a19dd9c69d83b325ad38c2a9dffff73ffbffc992ee2cc2d987940"
 dependencies = [
  "serde_json",
  "yog-body",
@@ -468,9 +468,9 @@ dependencies = [
 
 [[package]]
 name = "yog-ids"
-version = "0.6.1"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc555d75a780946cf0ba6f4cc44665fefd0d23501cf30737e963e8620e094667"
+checksum = "0a74a655b6c0b4b0564141448a2b8f3d5094611077a8d8ad31125cec47e8e8e0"
 dependencies = [
  "const_format",
  "yog-codegen",
@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "yog-pipes"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "yog-api",
  "yog-pipes-core",

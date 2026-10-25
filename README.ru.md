@@ -7,7 +7,7 @@
 ### Транспортный фреймворк для модов Yog: трубы, сети, маршрутизация и доставка
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.12.0-informational.svg)](yog.toml)
+[![Version](https://img.shields.io/badge/version-0.13.0-informational.svg)](yog.toml)
 [![Exports crate](https://img.shields.io/crates/v/yog_pipes_exports.svg?label=yog_pipes_exports)](https://crates.io/crates/yog_pipes_exports)
 [![Exports license](https://img.shields.io/badge/exports-MIT%20OR%20Apache--2.0-green.svg)](#-лицензия)
 [![Loaders](https://img.shields.io/badge/loaders-Fabric%20%7C%20NeoForge%20%7C%20Forge-8A2BE2.svg)](https://github.com/F000NKKK/Yog-Mod-Loader)
@@ -63,7 +63,7 @@ yog add --mod yog-pipes
 
 ```toml
 [dependencies.exports]
-yog-pipes = "0.12"
+yog-pipes = "0.13"
 ```
 
 Труба — обычный контент: объявите блок в `.yblock` (модель, отвод,
@@ -98,14 +98,14 @@ register_capability(CapabilityDef {
     distribution: Distribution::RoundRobin,
     events: None,
     mechanic: Mechanic::InFlight,
-}).unwrap();
+}).expect("Yog Pipes is loaded").unwrap();
 let pipe = Blocks::copper_pipe();
 attach(AttachDef {
     block: pipe.id,
     capability: "mymod:items".into(),
     groups: pipe.connect_groups, // the same groups the arms connect by
     params: [("speed".into(), 0.5)].into(),
-}).unwrap();
+}).expect("Yog Pipes is loaded").unwrap();
 ```
 
 Рецепты — контент вашего мода (`content/recipes/*.yrecipe`). Игрокам нужны оба
@@ -133,14 +133,14 @@ register_endpoint(EndpointDef {
     max_packet: 0,
     pressure: 0,
     handler: Some(Handler { mod_id: "mymod".into(), symbol: "on_crate".into() }),
-}).unwrap();
+}).expect("Yog Pipes is loaded").unwrap();
 
 let pos = |x, y, z| PipePos { dim: "minecraft:overworld".into(), x, y, z };
 let msg = PipePayload { data: vec![15], metadata: vec![] };
 // To one endpoint on the same network: false if not connected or its inbox is full.
-let delivered = post("mymod:bus".into(), pos(0, 64, 0), pos(4, 64, 0), msg.clone()).unwrap();
+let delivered = post("mymod:bus".into(), pos(0, 64, 0), pos(4, 64, 0), msg.clone()).expect("Yog Pipes is loaded").unwrap();
 // To every endpoint that listens to messages; kept as the network's latest value.
-let reached = broadcast("mymod:bus".into(), pos(0, 64, 0), msg).unwrap();
+let reached = broadcast("mymod:bus".into(), pos(0, 64, 0), msg).expect("Yog Pipes is loaded").unwrap();
 ```
 
 ## ⚙️ Как это работает
@@ -187,7 +187,7 @@ flowchart LR
 | `post`, `broadcast`, `receive`, `latest` | Сообщения по сети |
 | `network_info`, `pipe_info`, `indication` | Что держит сеть, возможности и грани трубы, значения её индикаторов |
 
-Все функции возвращают `Result<_, String>`. Типы (`PipePos`, `PipePayload`,
+Каждая функция отвечает `Option<Result<_, String>>`: `None`, если Yog Pipes не загружен (или упал). Типы (`PipePos`, `PipePayload`,
 `Stack`, `EndpointCall`, `EndpointReply`, `PipeEvent`, …) лежат в крейте
 `yog_pipes_exports`. Полное описание устройства:
 [`docs/design/transport.md`](docs/design/transport.md).

@@ -34,8 +34,15 @@ impl Mod for CopperPipes {
             groups: pipe.connect_groups,
             params: [("speed".into(), SPEED)].into(),
         };
-        if let Err(e) = register_capability(carried).and_then(|()| attach(pipe)) {
-            warn!("[copper-pipes] {e}");
+        // Each call answers `None` when Yog Pipes isn't loaded.
+        let done = register_capability(carried).and_then(|registered| match registered {
+            Ok(()) => attach(pipe),
+            Err(e) => Some(Err(e)),
+        });
+        match done {
+            Some(Ok(())) => {}
+            Some(Err(e)) => warn!("[copper-pipes] {e}"),
+            None => warn!("[copper-pipes] Yog Pipes isn't loaded"),
         }
     }
 }

@@ -7,7 +7,7 @@
 ### A transport framework for Yog mods: pipes, networks, routing and delivery
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.12.0-informational.svg)](yog.toml)
+[![Version](https://img.shields.io/badge/version-0.13.0-informational.svg)](yog.toml)
 [![Exports crate](https://img.shields.io/crates/v/yog_pipes_exports.svg?label=yog_pipes_exports)](https://crates.io/crates/yog_pipes_exports)
 [![Exports license](https://img.shields.io/badge/exports-MIT%20OR%20Apache--2.0-green.svg)](#-license)
 [![Loaders](https://img.shields.io/badge/loaders-Fabric%20%7C%20NeoForge%20%7C%20Forge-8A2BE2.svg)](https://github.com/F000NKKK/Yog-Mod-Loader)
@@ -61,7 +61,7 @@ This writes it into your `yog.toml`:
 
 ```toml
 [dependencies.exports]
-yog-pipes = "0.12"
+yog-pipes = "0.13"
 ```
 
 A pipe is ordinary content: declare the block in a `.yblock` (model,
@@ -96,14 +96,14 @@ register_capability(CapabilityDef {
     distribution: Distribution::RoundRobin,
     events: None,
     mechanic: Mechanic::InFlight,
-}).unwrap();
+}).expect("Yog Pipes is loaded").unwrap();
 let pipe = Blocks::copper_pipe();
 attach(AttachDef {
     block: pipe.id,
     capability: "mymod:items".into(),
     groups: pipe.connect_groups, // the same groups the arms connect by
     params: [("speed".into(), 0.5)].into(),
-}).unwrap();
+}).expect("Yog Pipes is loaded").unwrap();
 ```
 
 Recipes are your mod's own content (`content/recipes/*.yrecipe`). Players need
@@ -131,14 +131,14 @@ register_endpoint(EndpointDef {
     max_packet: 0,
     pressure: 0,
     handler: Some(Handler { mod_id: "mymod".into(), symbol: "on_crate".into() }),
-}).unwrap();
+}).expect("Yog Pipes is loaded").unwrap();
 
 let pos = |x, y, z| PipePos { dim: "minecraft:overworld".into(), x, y, z };
 let msg = PipePayload { data: vec![15], metadata: vec![] };
 // To one endpoint on the same network: false if not connected or its inbox is full.
-let delivered = post("mymod:bus".into(), pos(0, 64, 0), pos(4, 64, 0), msg.clone()).unwrap();
+let delivered = post("mymod:bus".into(), pos(0, 64, 0), pos(4, 64, 0), msg.clone()).expect("Yog Pipes is loaded").unwrap();
 // To every endpoint that listens to messages; kept as the network's latest value.
-let reached = broadcast("mymod:bus".into(), pos(0, 64, 0), msg).unwrap();
+let reached = broadcast("mymod:bus".into(), pos(0, 64, 0), msg).expect("Yog Pipes is loaded").unwrap();
 ```
 
 ## ⚙️ How It Works
@@ -183,7 +183,7 @@ flowchart LR
 | `post`, `broadcast`, `receive`, `latest` | Messages over a network |
 | `network_info`, `pipe_info`, `indication` | What a network holds, a pipe's capabilities and faces, its indicator values |
 
-All functions return `Result<_, String>`. The types (`PipePos`,
+Every function answers `Option<Result<_, String>>`: `None` when Yog Pipes isn't loaded (or failed). The types (`PipePos`,
 `PipePayload`, `Stack`, `EndpointCall`, `EndpointReply`, `PipeEvent`, …) are
 in the `yog_pipes_exports` crate. The design in full:
 [`docs/design/transport.md`](docs/design/transport.md).
