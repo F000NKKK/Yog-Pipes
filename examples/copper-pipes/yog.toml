@@ -4,9 +4,9 @@
 # only marks it as a pipe.
 [mod]
 id          = "copper-pipes"
-name        = "@Strings.mod_name"
+name        = "@res:Strings.mod_name"
 version     = "0.1.0"
-description = "@Strings.mod_description"
+description = "@res:Strings.mod_description"
 authors     = ["Yog Team"]
 license     = "MIT"
 

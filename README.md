@@ -70,8 +70,8 @@ connection arm, `connect_groups`, name and tooltip from your `.yres`):
 ```jsonc
 // content/blocks/copper_pipe.yblock
 {
-  "name": "@Strings.copper_pipe",
-  "tooltip": "@Strings.copper_pipe.desc",
+  "name": "@res:Strings.copper_pipe",
+  "tooltip": "@res:Strings.copper_pipe.desc",
   "block": { "hardness": 1.5, "sound": "metal", "connect_groups": ["pipe_item"] },
   "model": { "textures": { "pipe": "minecraft:block/copper_block" }, "elements": [ /* the core */ ] },
   "states": { "connect": { "arm": { /* the arm towards north */ } } }
