@@ -1,1 +1,1 @@
-SDATmod_namevalueCopper Pipescomment=The mod's name (yog.toml name)mod_description]Example mod for Yog Pipes: a copper item pipe.)yog.toml descriptioncopper_pipeCopper PipeBlock name!copper_pipe.desc)Item pipe · speed 2Block tooltip
+SDAT	mod_namemod_descriptioncopper_pipe!copper_pipe.descvaluecommentCopper Pipes=The mod's name (yog.toml name)]Example mod for Yog Pipes: a copper item pipe.)yog.toml descriptionCopper PipeBlock name)Item pipe · speed 2Block tooltip
